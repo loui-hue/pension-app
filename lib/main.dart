@@ -10,6 +10,7 @@ import 'modules/cobranzas/cobranza_screen.dart';
 import 'modules/fidelizacion/fidelizacion_screen.dart';
 import 'modules/mesas/mesas_screen.dart';
 import 'modules/clientes/usuarios_screen.dart';
+import 'modules/reportes/reportes_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -36,6 +37,7 @@ class MyApp extends StatelessWidget {
         '/fidelizacion': (context) => const FidelizacionScreen(),
         '/mesas': (context) => const MesasScreen(),
         '/usuarios': (context) => const UsuariosScreen(),
+        '/reportes': (context) => const ReportesScreen(),
       },
     );
   }

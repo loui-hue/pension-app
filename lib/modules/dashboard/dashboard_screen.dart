@@ -59,6 +59,7 @@ class DashboardScreen extends StatelessWidget {
   List<Widget> _getMenuItems(String role, BuildContext context) {
     final allItems = {
       AppConstants.roleAdmin: [
+        _MenuItem(icon: Icons.bar_chart, label: 'Reportes', route: '/reportes'),
         _MenuItem(icon: Icons.add_shopping_cart, label: 'Nuevo Pedido', route: '/crear-pedido'),
         _MenuItem(icon: Icons.people, label: 'Usuarios', route: '/usuarios'),
         _MenuItem(icon: Icons.fastfood, label: 'Productos', route: '/productos'),
