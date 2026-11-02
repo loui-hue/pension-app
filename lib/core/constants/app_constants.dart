@@ -1,5 +1,10 @@
 class AppConstants {
-  static const String baseUrl = 'http://192.168.0.213:8000/api';
+  // IP del servidor local (PC con Docker en el Wi-Fi de la pensión). Se cambia sin tocar código:
+  //   flutter run --dart-define=API_URL=http://<IP-del-servidor>:8000/api
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://192.168.0.50:8000/api',
+  );
   static const String tokenKey = 'auth_token';
   static const String userKey = 'auth_user';
 
