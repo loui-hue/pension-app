@@ -35,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final response = await _apiService.post('/login', {
-        'email': _emailController.text.trim(),
+        'email': _emailController.text.trim().toLowerCase(),
         'password': _passwordController.text,
       });
 
@@ -47,7 +47,14 @@ class _LoginScreenState extends State<LoginScreen> {
       const storage = FlutterSecureStorage();
       await storage.write(key: AppConstants.userKey, value: role);
 
-      if (mounted) {
+      if (!mounted) return;
+      // Comensal registrado por el mesero: primero crea su propia contraseña.
+      if (response.data['user']['must_change_password'] == true) {
+        Navigator.pushReplacementNamed(context, '/cambiar-password', arguments: {
+          'role': role,
+          'actual': _passwordController.text,
+        });
+      } else {
         Navigator.pushReplacementNamed(context, '/dashboard', arguments: role);
       }
     } on DioException catch (e) {
@@ -55,6 +62,26 @@ class _LoginScreenState extends State<LoginScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  // Recuperación asistida: sin Internet ni SMS, el personal la restablece en persona.
+  void _olvideMiPassword() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('¿Olvidaste tu contraseña?', style: TextStyle(color: AppTheme.accent)),
+        content: const Text(
+          '1. Pídele al mesero o al administrador de la pensión que restablezca tu contraseña.\n\n'
+          '2. Luego entra con tu número de celular como usuario y como contraseña.\n\n'
+          '3. La app te pedirá crear una contraseña nueva.',
+          style: TextStyle(color: AppTheme.textLight),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Entendido')),
+        ],
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -100,14 +127,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
+                    textCapitalization: TextCapitalization.none,
+                    autocorrect: false,
+                    enableSuggestions: false,
                     style: const TextStyle(color: AppTheme.textLight),
                     decoration: InputDecoration(
-                      labelText: 'Correo electrónico',
+                      labelText: 'Correo o celular',
                       labelStyle: const TextStyle(color: AppTheme.accent),
-                      prefixIcon: const Icon(Icons.email, color: AppTheme.primary),
+                      prefixIcon: const Icon(Icons.person, color: AppTheme.primary),
                       filled: true,
                       fillColor: Colors.white10,
-                      border: OutlineInputBorder(
+                      border: UnderlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
@@ -117,6 +147,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
+                    autocorrect: false,
+                    enableSuggestions: false,
                     style: const TextStyle(color: AppTheme.textLight),
                     decoration: InputDecoration(
                       labelText: 'Contraseña',
@@ -131,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       filled: true,
                       fillColor: Colors.white10,
-                      border: OutlineInputBorder(
+                      border: UnderlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
@@ -146,6 +178,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? const CircularProgressIndicator(color: Colors.white)
                           : const Text('Ingresar', style: TextStyle(fontSize: 16)),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: _olvideMiPassword,
+                    child: const Text('¿Olvidaste tu contraseña?',
+                        style: TextStyle(color: AppTheme.accent)),
                   ),
                 ],
               ),
