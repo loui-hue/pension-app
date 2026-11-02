@@ -108,7 +108,14 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
       ),
       builder: (_) => _SelectorComensal(comensales: _comensales),
     );
-    if (elegido != null) setState(() => _comensalSeleccionado = elegido);
+    if (elegido == null) return;
+    setState(() {
+      _comensalSeleccionado = elegido;
+      // Si se acaba de registrar, que aparezca en la lista la próxima vez.
+      if (!_comensales.any((c) => c['id'] == elegido['id'])) {
+        _comensales = [elegido, ..._comensales];
+      }
+    });
   }
 
   Future<void> _enviarPedido() async {
@@ -190,183 +197,203 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
           ),
         ],
       ),
+      // Toda la pantalla desplaza junta (comensal, mesa, productos y notas); solo el
+      // botón de confirmar queda fijo abajo. Así la lista de productos usa casi todo el
+      // alto del celular y el teclado de "Notas" no aplasta la pantalla.
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-          : Column(
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
                 // Selector de comensal (solo personal)
-                if (_debeElegirComensal)
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    color: AppTheme.surface,
-                    child: InkWell(
-                      onTap: _elegirComensal,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Comensal',
-                          labelStyle: const TextStyle(color: AppTheme.accent),
-                          prefixIcon: const Icon(Icons.person, color: AppTheme.accent),
-                          suffixIcon: const Icon(Icons.search, color: AppTheme.accent),
-                          filled: true,
-                          fillColor: Colors.white10,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        child: Text(
-                          _comensalSeleccionado == null
-                              ? 'Toca para buscar al comensal'
-                              : '${_comensalSeleccionado!['name']}'
-                                  '${_comensalSeleccionado!['phone'] != null ? ' — ${_comensalSeleccionado!['phone']}' : ''}',
-                          style: TextStyle(
-                            color: _comensalSeleccionado == null
-                                ? Colors.white54
-                                : AppTheme.textLight,
-                          ),
+                if (_debeElegirComensal) ...[
+                  InkWell(
+                    onTap: _elegirComensal,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InputDecorator(
+                      decoration: _decoracionCampo('Comensal', Icons.person)
+                          .copyWith(suffixIcon: const Icon(Icons.search, color: AppTheme.accent)),
+                      child: Text(
+                        _comensalSeleccionado == null
+                            ? 'Toca para buscar al comensal'
+                            : '${_comensalSeleccionado!['name']}'
+                                '${_comensalSeleccionado!['phone'] != null ? ' — ${_comensalSeleccionado!['phone']}' : ''}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _comensalSeleccionado == null ? Colors.white54 : AppTheme.textLight,
                         ),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                ],
                 // Selector de mesa
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  color: AppTheme.surface,
-                  child: DropdownButtonFormField<int>(
-                    value: _mesaSeleccionada,
-                    dropdownColor: AppTheme.surface,
-                    style: const TextStyle(color: AppTheme.textLight),
-                    decoration: InputDecoration(
-                      labelText: 'Selecciona una mesa',
-                      labelStyle: const TextStyle(color: AppTheme.accent),
-                      filled: true,
-                      fillColor: Colors.white10,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                DropdownButtonFormField<int>(
+                  value: _mesaSeleccionada,
+                  isExpanded: true,
+                  dropdownColor: AppTheme.surface,
+                  style: const TextStyle(color: AppTheme.textLight),
+                  decoration: _decoracionCampo('Mesa', Icons.table_restaurant),
+                  hint: const Text('Selecciona una mesa', style: TextStyle(color: Colors.white54)),
+                  items: _mesas.map<DropdownMenuItem<int>>((mesa) {
+                    return DropdownMenuItem<int>(
+                      value: mesa['id'],
+                      child: Text(
+                        'Mesa ${mesa['number']} — ${mesa['capacity']} personas',
+                        style: const TextStyle(color: AppTheme.textLight),
                       ),
-                    ),
-                    items: _mesas.map<DropdownMenuItem<int>>((mesa) {
-                      return DropdownMenuItem<int>(
-                        value: mesa['id'],
-                        child: Text(
-                          'Mesa ${mesa['number']} — ${mesa['capacity']} personas',
-                          style: const TextStyle(color: AppTheme.textLight),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) => setState(() => _mesaSeleccionada = val),
-                  ),
+                    );
+                  }).toList(),
+                  onChanged: (val) => setState(() => _mesaSeleccionada = val),
                 ),
-                // Productos en carrito
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _productos.length,
-                    itemBuilder: (context, index) {
-                      final producto = _productos[index];
-                      final cantidad = _carrito[producto['id']] ?? 0;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: AppTheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: cantidad > 0
-                              ? Border.all(color: AppTheme.primary, width: 2)
-                              : null,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.fastfood, color: AppTheme.primary, size: 36),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      producto['name'],
-                                      style: const TextStyle(
-                                        color: AppTheme.textLight,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Bs. ${producto['price']}',
-                                      style: const TextStyle(color: AppTheme.accent),
-                                    ),
-                                  ],
-                                ),
+                // Productos agrupados por categoría
+                ..._productosPorCategoria().entries.expand((grupo) => [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20, bottom: 8),
+                        child: Row(
+                          children: [
+                            Icon(_iconoCategoria(grupo.key), color: AppTheme.accent, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              grupo.key,
+                              style: const TextStyle(
+                                color: AppTheme.accent,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
                               ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    onPressed: () => _quitarProducto(producto['id']),
-                                    icon: const Icon(Icons.remove_circle, color: Colors.red),
-                                  ),
-                                  Text(
-                                    '$cantidad',
-                                    style: const TextStyle(
-                                      color: AppTheme.textLight,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () => _agregarProducto(producto['id']),
-                                    icon: const Icon(Icons.add_circle, color: Colors.green),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                // Notas
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    style: const TextStyle(color: AppTheme.textLight),
-                    decoration: InputDecoration(
-                      labelText: 'Notas del pedido (opcional)',
-                      labelStyle: const TextStyle(color: AppTheme.accent),
-                      filled: true,
-                      fillColor: AppTheme.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (val) => _notas = val,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Botón enviar
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _enviando ? null : _enviarPedido,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: _enviando
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : Text(
-                              'Confirmar Pedido — Bs. ${_total.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 16),
                             ),
-                    ),
-                  ),
+                          ],
+                        ),
+                      ),
+                      ...grupo.value.map(_buildProducto),
+                    ]),
+                const SizedBox(height: 12),
+                // Notas
+                TextField(
+                  style: const TextStyle(color: AppTheme.textLight),
+                  maxLines: 2,
+                  minLines: 1,
+                  decoration: _decoracionCampo('Notas del pedido (opcional)', Icons.edit_note),
+                  onChanged: (val) => _notas = val,
                 ),
               ],
             ),
+      // Botón fijo con el total, siempre visible.
+      bottomNavigationBar: _isLoading
+          ? null
+          : SafeArea(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                decoration: const BoxDecoration(
+                  color: AppTheme.background,
+                  border: Border(top: BorderSide(color: Colors.white12)),
+                ),
+                child: ElevatedButton(
+                  onPressed: _enviando ? null : _enviarPedido,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _enviando
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Text(
+                          _cantidadItems == 0
+                              ? 'Confirmar Pedido — Bs. ${_total.toStringAsFixed(2)}'
+                              : 'Confirmar $_cantidadItems ${_cantidadItems == 1 ? 'producto' : 'productos'} — Bs. ${_total.toStringAsFixed(2)}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                ),
+              ),
+            ),
+    );
+  }
+
+  InputDecoration _decoracionCampo(String etiqueta, IconData icono) => InputDecoration(
+        labelText: etiqueta,
+        labelStyle: const TextStyle(color: AppTheme.accent),
+        prefixIcon: Icon(icono, color: AppTheme.accent),
+        filled: true,
+        fillColor: AppTheme.surface,
+        border: UnderlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      );
+
+  int get _cantidadItems => _carrito.values.fold(0, (suma, c) => suma + c);
+
+  /// Productos agrupados por el nombre de su categoría, en el orden en que llegan.
+  Map<String, List> _productosPorCategoria() {
+    final grupos = <String, List>{};
+    for (final p in _productos) {
+      final categoria = (p['category']?['name'] ?? 'Otros').toString();
+      grupos.putIfAbsent(categoria, () => []).add(p);
+    }
+    return grupos;
+  }
+
+  IconData _iconoCategoria(String categoria) {
+    final c = categoria.toLowerCase();
+    if (c.contains('bebida')) return Icons.local_drink;
+    if (c.contains('postre')) return Icons.icecream;
+    if (c.contains('entrada') || c.contains('sopa')) return Icons.soup_kitchen;
+    if (c.contains('menú') || c.contains('menu')) return Icons.restaurant_menu;
+    return Icons.dinner_dining;
+  }
+
+  Widget _buildProducto(dynamic producto) {
+    final cantidad = _carrito[producto['id']] ?? 0;
+    final categoria = (producto['category']?['name'] ?? '').toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: cantidad > 0 ? AppTheme.primary : Colors.transparent,
+          width: 2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(_iconoCategoria(categoria), color: AppTheme.primary, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  producto['name'],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold),
+                ),
+                Text('Bs. ${producto['price']}', style: const TextStyle(color: AppTheme.accent)),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: cantidad == 0 ? null : () => _quitarProducto(producto['id']),
+            icon: Icon(Icons.remove_circle, color: cantidad == 0 ? Colors.white24 : Colors.red),
+          ),
+          SizedBox(
+            width: 28,
+            child: Text(
+              '$cantidad',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppTheme.textLight, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _agregarProducto(producto['id']),
+            icon: const Icon(Icons.add_circle, color: Colors.green),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -382,6 +409,164 @@ class _SelectorComensal extends StatefulWidget {
 
 class _SelectorComensalState extends State<_SelectorComensal> {
   String _busqueda = '';
+
+  /// Recuperación asistida: el comensal olvidó su contraseña y está presente.
+  /// Vuelve a ser temporal (su celular) y crea una nueva al entrar.
+  Future<void> _restablecerPassword(Map comensal) async {
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        title: const Text('Restablecer contraseña', style: TextStyle(color: AppTheme.accent)),
+        content: Text(
+          '¿Verificaste en persona que es ${comensal['name']}?\n\n'
+          'Su contraseña volverá a ser su celular (${comensal['phone']}) y '
+          'la app le pedirá crear una nueva al entrar.',
+          style: const TextStyle(color: AppTheme.textLight),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, restablecer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true || !mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await ApiService().post('/customers/${comensal['id']}/reset-password', {});
+      messenger.showSnackBar(SnackBar(
+        content: Text(res.data['message'] ?? 'Contraseña restablecida'),
+        backgroundColor: Colors.green,
+      ));
+    } catch (e) {
+      final data = e is DioException ? e.response?.data : null;
+      messenger.showSnackBar(SnackBar(
+        content: Text((data is Map ? data['message'] : null) ?? 'No se pudo restablecer la contraseña'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  /// Registro rápido: nombre y teléfono (el correo es opcional). El comensal
+  /// queda seleccionado para el pedido y luego entra a la app con su teléfono.
+  Future<void> _registrar() async {
+    final busqueda = _busqueda.trim();
+    final esNumero = RegExp(r'^[0-9]+$').hasMatch(busqueda);
+    final nombre = TextEditingController(text: esNumero ? '' : busqueda);
+    final telefono = TextEditingController(text: esNumero ? busqueda : '');
+    final correo = TextEditingController();
+    String? error;
+    bool guardando = false;
+
+    final nuevo = await showDialog<Map>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          Future<void> guardar() async {
+            if (nombre.text.trim().isEmpty || telefono.text.trim().isEmpty) {
+              setDialogState(() => error = 'Escribe el nombre y el teléfono');
+              return;
+            }
+            setDialogState(() {
+              guardando = true;
+              error = null;
+            });
+            try {
+              final res = await ApiService().post('/customers', {
+                'name': nombre.text.trim(),
+                'phone': telefono.text.trim(),
+                if (correo.text.trim().isNotEmpty) 'email': correo.text.trim().toLowerCase(),
+              });
+              if (context.mounted) Navigator.pop(context, res.data as Map);
+            } catch (e) {
+              final data = e is DioException ? e.response?.data : null;
+              final errores = data is Map ? data['errors'] : null;
+              setDialogState(() {
+                guardando = false;
+                error = errores is Map && errores.isNotEmpty
+                    ? (errores.values.first as List).first.toString()
+                    : (data is Map ? data['message'] : null) ?? 'No se pudo registrar';
+              });
+            }
+          }
+
+          InputDecoration deco(String etiqueta, IconData icono) => InputDecoration(
+                labelText: etiqueta,
+                labelStyle: const TextStyle(color: AppTheme.accent),
+                prefixIcon: Icon(icono, color: AppTheme.accent),
+                filled: true,
+                fillColor: Colors.white10,
+                border: UnderlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              );
+
+          return AlertDialog(
+            backgroundColor: AppTheme.surface,
+            title: const Text('Registrar comensal', style: TextStyle(color: AppTheme.accent)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nombre,
+                    textCapitalization: TextCapitalization.words,
+                    style: const TextStyle(color: AppTheme.textLight),
+                    decoration: deco('Nombre completo', Icons.person),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: telefono,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(color: AppTheme.textLight),
+                    decoration: deco('Celular', Icons.phone),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: correo,
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    style: const TextStyle(color: AppTheme.textLight),
+                    decoration: deco('Correo (opcional)', Icons.email),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Podrá entrar a la app con su celular. La primera vez su contraseña es '
+                    'el mismo número y la app le pedirá crear una propia.',
+                    style: TextStyle(color: Colors.white60, fontSize: 12),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 10),
+                    Text(error!, style: const TextStyle(color: Colors.redAccent)),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: guardando ? null : () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: guardando ? null : guardar,
+                child: guardando
+                    ? const SizedBox(
+                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Registrar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (nuevo != null && mounted) Navigator.pop(context, nuevo);
+  }
 
   List get _filtrados {
     final q = _busqueda.trim().toLowerCase();
@@ -420,7 +605,7 @@ class _SelectorComensalState extends State<_SelectorComensal> {
                   prefixIcon: const Icon(Icons.search, color: AppTheme.accent),
                   filled: true,
                   fillColor: AppTheme.surface,
-                  border: OutlineInputBorder(
+                  border: UnderlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
@@ -428,11 +613,25 @@ class _SelectorComensalState extends State<_SelectorComensal> {
                 onChanged: (val) => setState(() => _busqueda = val),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _registrar,
+                  icon: const Icon(Icons.person_add, color: AppTheme.accent),
+                  label: const Text('Registrar comensal nuevo',
+                      style: TextStyle(color: AppTheme.accent)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             Expanded(
               child: filtrados.isEmpty
                   ? const Center(
                       child: Text(
-                        'No se encontraron comensales',
+                        'No se encontraron comensales.\nRegístralo con el botón de arriba.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white54),
                       ),
                     )
@@ -458,6 +657,13 @@ class _SelectorComensalState extends State<_SelectorComensal> {
                             c['phone'] ?? c['email'],
                             style: const TextStyle(color: Colors.white54),
                           ),
+                          trailing: c['phone'] == null
+                              ? null
+                              : IconButton(
+                                  tooltip: 'Restablecer contraseña',
+                                  icon: const Icon(Icons.key, color: AppTheme.accent),
+                                  onPressed: () => _restablecerPassword(c),
+                                ),
                           onTap: () => Navigator.pop(context, c),
                         );
                       },
