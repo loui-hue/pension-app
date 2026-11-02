@@ -128,7 +128,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
         labelStyle: const TextStyle(color: AppTheme.accent),
         filled: true,
         fillColor: Colors.white10,
-        border: OutlineInputBorder(
+        border: UnderlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),

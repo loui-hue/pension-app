@@ -290,7 +290,7 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
                       labelStyle: const TextStyle(color: AppTheme.accent),
                       filled: true,
                       fillColor: AppTheme.surface,
-                      border: OutlineInputBorder(
+                      border: UnderlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
