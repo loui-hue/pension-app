@@ -67,6 +67,7 @@ class DashboardScreen extends StatelessWidget {
         _MenuItem(icon: Icons.receipt_long, label: 'Pedidos', route: '/pedidos'),
         _MenuItem(icon: Icons.payment, label: 'Cobranza', route: '/cobranza'),
         _MenuItem(icon: Icons.star, label: 'Fidelización', route: '/fidelizacion'),
+        _MenuItem(icon: Icons.qr_code, label: 'Métodos de pago', route: '/metodos-pago'),
       ],
       AppConstants.roleMesero: [
         _MenuItem(icon: Icons.add_shopping_cart, label: 'Nuevo Pedido', route: '/crear-pedido'),

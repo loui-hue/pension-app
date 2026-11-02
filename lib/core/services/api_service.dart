@@ -39,4 +39,17 @@ class ApiService {
   Future<Response> put(String path, dynamic data) async => await _dio.put(path, data: data);
   Future<Response> patch(String path, dynamic data) async => await _dio.patch(path, data: data);
   Future<Response> delete(String path) async => await _dio.delete(path);
+
+  // Subida de archivos (p. ej. imagen del QR); Dio arma el multipart a partir del FormData.
+  Future<Response> postMultipart(String path, FormData data) async => await _dio.post(
+        path,
+        data: data,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+
+  // Descarga binaria con el token de sesión (imágenes protegidas del API).
+  Future<List<int>> getBytes(String path) async {
+    final res = await _dio.get<List<int>>(path, options: Options(responseType: ResponseType.bytes));
+    return res.data ?? [];
+  }
 }
