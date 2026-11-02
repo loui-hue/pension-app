@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/services/api_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -60,6 +59,7 @@ class DashboardScreen extends StatelessWidget {
   List<Widget> _getMenuItems(String role, BuildContext context) {
     final allItems = {
       AppConstants.roleAdmin: [
+        _MenuItem(icon: Icons.add_shopping_cart, label: 'Nuevo Pedido', route: '/crear-pedido'),
         _MenuItem(icon: Icons.people, label: 'Usuarios', route: '/usuarios'),
         _MenuItem(icon: Icons.fastfood, label: 'Productos', route: '/productos'),
         _MenuItem(icon: Icons.table_restaurant, label: 'Mesas', route: '/mesas'),
@@ -68,6 +68,7 @@ class DashboardScreen extends StatelessWidget {
         _MenuItem(icon: Icons.star, label: 'Fidelización', route: '/fidelizacion'),
       ],
       AppConstants.roleMesero: [
+        _MenuItem(icon: Icons.add_shopping_cart, label: 'Nuevo Pedido', route: '/crear-pedido'),
         _MenuItem(icon: Icons.table_restaurant, label: 'Mesas', route: '/mesas'),
         _MenuItem(icon: Icons.receipt_long, label: 'Pedidos', route: '/pedidos'),
         _MenuItem(icon: Icons.fastfood, label: 'Productos', route: '/productos'),
@@ -88,12 +89,12 @@ class DashboardScreen extends StatelessWidget {
     };
 
     final items = allItems[role] ?? [];
-    return items.map((item) => _buildCard(item, context)).toList();
+    return items.map((item) => _buildCard(item, context, role)).toList();
   }
 
-  Widget _buildCard(_MenuItem item, BuildContext context) {
+  Widget _buildCard(_MenuItem item, BuildContext context, String role) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, item.route),
+      onTap: () => Navigator.pushNamed(context, item.route, arguments: role),
       child: Container(
         decoration: BoxDecoration(
           color: AppTheme.surface,

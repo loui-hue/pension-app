@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
 
@@ -13,8 +16,11 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
   final _apiService = ApiService();
   List _productos = [];
   List _mesas = [];
+  List _comensales = [];
   Map<int, int> _carrito = {};
   int? _mesaSeleccionada;
+  Map? _comensalSeleccionado;
+  String _role = AppConstants.roleCliente;
   String _notas = '';
   bool _isLoading = true;
   bool _enviando = false;
@@ -38,16 +44,27 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
     }
   }
 
+  // El personal (mesero, admin) registra pedidos a nombre de un comensal;
+  // el cliente los hace a su propio nombre.
+  bool get _debeElegirComensal => _role != AppConstants.roleCliente;
+
   Future<void> _cargarDatos() async {
     await _apiService.init();
     try {
+      const storage = FlutterSecureStorage();
+      _role = await storage.read(key: AppConstants.userKey) ?? AppConstants.roleCliente;
+
       final resProd = await _apiService.get('/products');
       final resMesas = await _apiService.get('/tables');
+      final resComensales = _debeElegirComensal
+          ? await _apiService.get('/users?role=${AppConstants.roleCliente}')
+          : null;
       setState(() {
         _productos = resProd.data;
         _mesas = resMesas.data
             .where((m) => m['status'] == 'disponible')
             .toList();
+        _comensales = resComensales?.data ?? [];
         _isLoading = false;
       });
     } catch (e) {
@@ -81,7 +98,26 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
     });
   }
 
+  Future<void> _elegirComensal() async {
+    final elegido = await showModalBottomSheet<Map>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _SelectorComensal(comensales: _comensales),
+    );
+    if (elegido != null) setState(() => _comensalSeleccionado = elegido);
+  }
+
   Future<void> _enviarPedido() async {
+    if (_debeElegirComensal && _comensalSeleccionado == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona al comensal'), backgroundColor: Colors.red),
+      );
+      return;
+    }
     if (_mesaSeleccionada == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona una mesa'), backgroundColor: Colors.red),
@@ -107,6 +143,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         'table_id': _mesaSeleccionada,
         'notes': _notas,
         'items': items,
+        if (_debeElegirComensal) 'user_id': _comensalSeleccionado!['id'],
       });
 
       if (mounted) {
@@ -119,11 +156,16 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al enviar pedido'), backgroundColor: Colors.red),
-      );
+      final mensaje = e is DioException && e.response?.data is Map
+          ? (e.response!.data['message'] ?? 'Error al enviar pedido')
+          : 'Error al enviar pedido';
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(mensaje), backgroundColor: Colors.red),
+        );
+      }
     } finally {
-      setState(() => _enviando = false);
+      if (mounted) setState(() => _enviando = false);
     }
   }
 
@@ -131,7 +173,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Confirmar Pedido'),
+        title: const Text('Nuevo Pedido'),
         actions: [
           Center(
             child: Padding(
@@ -152,6 +194,41 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : Column(
               children: [
+                // Selector de comensal (solo personal)
+                if (_debeElegirComensal)
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    color: AppTheme.surface,
+                    child: InkWell(
+                      onTap: _elegirComensal,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Comensal',
+                          labelStyle: const TextStyle(color: AppTheme.accent),
+                          prefixIcon: const Icon(Icons.person, color: AppTheme.accent),
+                          suffixIcon: const Icon(Icons.search, color: AppTheme.accent),
+                          filled: true,
+                          fillColor: Colors.white10,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        child: Text(
+                          _comensalSeleccionado == null
+                              ? 'Toca para buscar al comensal'
+                              : '${_comensalSeleccionado!['name']}'
+                                  '${_comensalSeleccionado!['phone'] != null ? ' — ${_comensalSeleccionado!['phone']}' : ''}',
+                          style: TextStyle(
+                            color: _comensalSeleccionado == null
+                                ? Colors.white54
+                                : AppTheme.textLight,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 // Selector de mesa
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -290,6 +367,105 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// Hoja inferior para buscar al comensal por nombre, correo o teléfono.
+class _SelectorComensal extends StatefulWidget {
+  final List comensales;
+  const _SelectorComensal({required this.comensales});
+
+  @override
+  State<_SelectorComensal> createState() => _SelectorComensalState();
+}
+
+class _SelectorComensalState extends State<_SelectorComensal> {
+  String _busqueda = '';
+
+  List get _filtrados {
+    final q = _busqueda.trim().toLowerCase();
+    if (q.isEmpty) return widget.comensales;
+    return widget.comensales.where((c) {
+      return '${c['name']} ${c['email']} ${c['phone'] ?? ''}'.toLowerCase().contains(q);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtrados = _filtrados;
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            const Text(
+              'Selecciona al comensal',
+              style: TextStyle(
+                color: AppTheme.accent,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: TextField(
+                autofocus: true,
+                style: const TextStyle(color: AppTheme.textLight),
+                decoration: InputDecoration(
+                  hintText: 'Nombre, correo o teléfono',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  prefixIcon: const Icon(Icons.search, color: AppTheme.accent),
+                  filled: true,
+                  fillColor: AppTheme.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (val) => setState(() => _busqueda = val),
+              ),
+            ),
+            Expanded(
+              child: filtrados.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No se encontraron comensales',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtrados.length,
+                      itemBuilder: (context, index) {
+                        final c = filtrados[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppTheme.primary,
+                            child: Text(
+                              c['name'].toString().isNotEmpty
+                                  ? c['name'].toString()[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(color: AppTheme.textLight),
+                            ),
+                          ),
+                          title: Text(
+                            c['name'],
+                            style: const TextStyle(color: AppTheme.textLight),
+                          ),
+                          subtitle: Text(
+                            c['phone'] ?? c['email'],
+                            style: const TextStyle(color: Colors.white54),
+                          ),
+                          onTap: () => Navigator.pop(context, c),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
