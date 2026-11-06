@@ -45,7 +45,9 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
 
       setState(() {
         _totalXp = puntos;
-        _todasInsignias = resTodasInsignias.data;
+        // De menor a mayor XP requerido, para que se lea como una progresión.
+        _todasInsignias = List.of(resTodasInsignias.data as List)
+          ..sort((a, b) => ((a['xp_required'] ?? 0) as num).compareTo((b['xp_required'] ?? 0) as num));
         _insigniasObtenidas = resInsigniasUsuario.data;
         _todosRetos = resTodosRetos.data;
         _retosUsuario = resRetosUsuario.data;
@@ -198,69 +200,218 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
     );
   }
 
+  /// Ícono y colores propios de cada insignia (medalla), según su nombre o tipo.
+  ({IconData icono, List<Color> colores}) _estiloInsignia(Map insignia) {
+    final nombre = insignia['name'].toString().toLowerCase();
+    final tipo = (insignia['type'] ?? '').toString();
+    if (nombre.contains('primer')) {
+      return (icono: Icons.restaurant, colores: const [Color(0xFFE0A26B), Color(0xFFA0522D)]); // bronce
+    }
+    if (nombre.contains('racha')) {
+      return (icono: Icons.local_fire_department, colores: const [Color(0xFFFFB74D), Color(0xFFE64A19)]);
+    }
+    if (nombre.contains('frecuente')) {
+      return (icono: Icons.favorite, colores: const [Color(0xFFF48FB1), Color(0xFFC2185B)]);
+    }
+    if (nombre.contains('gourmet')) {
+      return (icono: Icons.ramen_dining, colores: const [Color(0xFFAED581), Color(0xFF558B2F)]);
+    }
+    if (nombre.contains('vip') || tipo == 'especial') {
+      return (icono: Icons.workspace_premium, colores: const [Color(0xFFFFE082), Color(0xFFFFA000)]); // oro
+    }
+    if (tipo == 'retos') {
+      return (icono: Icons.flag, colores: const [Color(0xFF81D4FA), Color(0xFF1976D2)]);
+    }
+    return (icono: Icons.emoji_events, colores: const [Color(0xFFFFCC80), Color(0xFFE07B39)]);
+  }
+
   Widget _buildInsigniasTab() {
     if (_todasInsignias.isEmpty) {
       return const Center(child: Text('Aún no hay insignias configuradas.'));
     }
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: _todasInsignias.length,
-      itemBuilder: (context, index) {
-        final insignia = _todasInsignias[index];
-        final obtenida = _tieneInsignia(insignia['id']);
-        final color = obtenida ? AppTheme.primary : AppTheme.textLight.withOpacity(0.3);
+    final obtenidas = _todasInsignias.where((i) => _tieneInsignia(i['id'])).length;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color),
+    return CustomScrollView(
+      slivers: [
+        // Resumen: cuántas lleva y el XP acumulado.
+        SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.military_tech, color: AppTheme.accent, size: 40),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$obtenidas de ${_todasInsignias.length} insignias',
+                        style: const TextStyle(
+                          color: AppTheme.textLight,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: obtenidas / _todasInsignias.length,
+                          minHeight: 8,
+                          backgroundColor: Colors.white12,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text('Tienes $_totalXp XP', style: const TextStyle(color: AppTheme.accent, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Stack(
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              mainAxisExtent: 236,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _buildInsignia(_todasInsignias[index]),
+              childCount: _todasInsignias.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInsignia(Map insignia) {
+    final obtenida = _tieneInsignia(insignia['id']);
+    final estilo = _estiloInsignia(insignia);
+    final requerido = ((insignia['xp_required'] ?? 0) as num).toInt();
+    final progreso = requerido == 0 ? 1.0 : (_totalXp / requerido).clamp(0.0, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: obtenida ? estilo.colores.last.withValues(alpha: 0.8) : Colors.white10,
+          width: obtenida ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Medalla: círculo con degradado y anillo; bloqueada se ve en gris con candado.
+          Stack(
+            alignment: Alignment.center,
             children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.emoji_events,
-                    size: 48,
-                    color: obtenida ? AppTheme.accent : AppTheme.textLight.withOpacity(0.4),
+              Container(
+                width: 84,
+                height: 84,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: obtenida
+                      ? LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: estilo.colores,
+                        )
+                      : null,
+                  color: obtenida ? null : Colors.white10,
+                  border: Border.all(
+                    color: obtenida ? Colors.white.withValues(alpha: 0.6) : Colors.white12,
+                    width: 3,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    insignia['name'],
-                    style: TextStyle(
-                      color: obtenida ? AppTheme.textLight : AppTheme.textLight.withOpacity(0.5),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    obtenida ? 'Obtenida' : '${insignia['xp_required']} XP requeridos',
-                    style: TextStyle(
-                      color: obtenida ? AppTheme.primary : AppTheme.textLight.withOpacity(0.5),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+                  boxShadow: obtenida
+                      ? [BoxShadow(color: estilo.colores.last.withValues(alpha: 0.5), blurRadius: 14)]
+                      : null,
+                ),
+                child: Icon(
+                  estilo.icono,
+                  size: 40,
+                  color: obtenida ? Colors.white : Colors.white24,
+                ),
               ),
-              if (obtenida)
-                const Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Icon(Icons.check_circle, color: Colors.green, size: 20),
+              if (!obtenida)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(color: AppTheme.background, shape: BoxShape.circle),
+                    child: const Icon(Icons.lock, size: 16, color: Colors.white54),
+                  ),
                 ),
             ],
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          Text(
+            insignia['name'],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: obtenida ? AppTheme.textLight : Colors.white60,
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            insignia['description'] ?? '',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.25),
+          ),
+          const Spacer(),
+          if (obtenida)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle, color: Colors.greenAccent, size: 14),
+                  SizedBox(width: 4),
+                  Text('Obtenida', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                ],
+              ),
+            )
+          else ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: progreso,
+                minHeight: 6,
+                backgroundColor: Colors.white10,
+                color: estilo.colores.last,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_totalXp.clamp(0, requerido)} / $requerido XP',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -284,7 +435,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
           decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+            border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -313,7 +464,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
                           Text(
                             reto['description'] ?? '',
                             style: TextStyle(
-                              color: AppTheme.textLight.withOpacity(0.7),
+                              color: AppTheme.textLight.withValues(alpha: 0.7),
                               fontSize: 12,
                             ),
                           ),
@@ -340,7 +491,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
                     child: LinearProgressIndicator(
                       value: progreso / 100,
                       minHeight: 8,
-                      backgroundColor: AppTheme.textLight.withOpacity(0.15),
+                      backgroundColor: AppTheme.textLight.withValues(alpha: 0.15),
                       color: completado ? Colors.green : AppTheme.accent,
                     ),
                   ),
@@ -348,7 +499,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
                   Text(
                     completado ? '¡Reto completado!' : 'Progreso: ${progreso.toInt()}%',
                     style: TextStyle(
-                      color: completado ? Colors.green : AppTheme.textLight.withOpacity(0.7),
+                      color: completado ? Colors.green : AppTheme.textLight.withValues(alpha: 0.7),
                       fontSize: 12,
                     ),
                   ),
