@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/api_service.dart';
+import '../../core/services/cache_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -26,32 +28,42 @@ class DashboardScreen extends StatelessWidget {
           )
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            color: AppTheme.surface,
-            child: Text(
-              'Bienvenido: $role',
-              style: const TextStyle(
-                color: AppTheme.accent,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+      // Antes de armar el menú se averigua si está en la pensión o fuera (portal).
+      body: FutureBuilder(
+        future: ApiService.elegirServidor(),
+        builder: (context, estado) {
+          if (estado.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+          }
+          return Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: AppTheme.surface,
+                child: Text(
+                  'Bienvenido: $role',
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-          Expanded(
-            child: GridView.count(
-              crossAxisCount: 2,
-              padding: const EdgeInsets.all(16),
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              children: _getMenuItems(role, context),
-            ),
-          ),
-        ],
+              if (ApiService.modoRemoto) const _AvisoModoRemoto(),
+              Expanded(
+                child: GridView.count(
+                  crossAxisCount: 2,
+                  padding: const EdgeInsets.all(16),
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  children: _getMenuItems(role, context),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -90,7 +102,11 @@ class DashboardScreen extends StatelessWidget {
       ],
     };
 
-    final items = allItems[role] ?? [];
+    var items = allItems[role] ?? [];
+    // Fuera de la pensión (portal en la nube) solo se puede consultar.
+    if (ApiService.modoRemoto) {
+      items = items.where((i) => i.route == '/mis-pedidos' || i.route == '/fidelizacion').toList();
+    }
     return items.map((item) => _buildCard(item, context, role)).toList();
   }
 
@@ -118,6 +134,37 @@ class DashboardScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AvisoModoRemoto extends StatelessWidget {
+  const _AvisoModoRemoto();
+
+  @override
+  Widget build(BuildContext context) {
+    final fecha = ApiService.portalSincronizadoEn;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E3A5F),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_done, color: Colors.lightBlueAccent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Estás fuera de la pensión: puedes consultar tu avance.'
+              '${fecha != null ? '\nDatos actualizados ${CacheService.describirFecha(fecha)}.' : ''}',
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
       ),
     );
   }

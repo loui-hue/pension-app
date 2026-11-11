@@ -5,8 +5,13 @@ class AppConstants {
     'API_URL',
     defaultValue: 'http://192.168.0.50:8000/api',
   );
+  // Portal en la nube (solo consultas del comensal fuera de la pensión). Vacío = sin portal.
+  //   flutter build apk --dart-define=PORTAL_URL=https://<IP-del-VPS>.sslip.io/api
+  static const String portalUrl = String.fromEnvironment('PORTAL_URL', defaultValue: '');
+
   static const String tokenKey = 'auth_token';
-  static const String userKey = 'auth_user';
+  static const String userKey = 'auth_user';      // rol del usuario con sesión
+  static const String userIdKey = 'auth_user_id'; // id, para la caché por usuario
 
   // Roles
   static const String roleAdmin = 'administrador';

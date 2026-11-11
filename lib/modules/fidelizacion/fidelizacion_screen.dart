@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/cache_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/aviso_sin_conexion.dart';
 
 class FidelizacionScreen extends StatefulWidget {
   const FidelizacionScreen({super.key});
@@ -22,6 +26,8 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
   int _totalXp = 0;
   bool _isLoading = true;
   bool _uniendoReto = false;
+  // Fecha de la copia guardada cuando no hay conexión (null = datos en vivo).
+  DateTime? _desdeCache;
 
   @override
   void initState() {
@@ -32,31 +38,48 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
 
   Future<void> _cargarDatos() async {
     await _apiService.init();
+    const storage = FlutterSecureStorage();
+    final usuarioId = int.tryParse(await storage.read(key: AppConstants.userIdKey) ?? '');
+    final claveCache = CacheService.clave(usuarioId, 'fidelizacion');
+
     try {
-      final resPuntos = await _apiService.get('/loyalty');
-      final resTodasInsignias = await _apiService.get('/badges');
-      final resInsigniasUsuario = await _apiService.get('/badges/user');
-      final resTodosRetos = await _apiService.get('/challenges');
-      final resRetosUsuario = await _apiService.get('/challenges/user');
-      final resRacha = await _apiService.post('/loyalty/streak', {});
-
-      final puntos = (resPuntos.data as List)
-          .fold<int>(0, (sum, p) => sum + ((p['points'] ?? 0) as num).toInt());
-
-      setState(() {
-        _totalXp = puntos;
-        // De menor a mayor XP requerido, para que se lea como una progresión.
-        _todasInsignias = List.of(resTodasInsignias.data as List)
-          ..sort((a, b) => ((a['xp_required'] ?? 0) as num).compareTo((b['xp_required'] ?? 0) as num));
-        _insigniasObtenidas = resInsigniasUsuario.data;
-        _todosRetos = resTodosRetos.data;
-        _retosUsuario = resRetosUsuario.data;
-        _racha = resRacha.data;
-        _isLoading = false;
-      });
+      final datos = {
+        'puntos': (await _apiService.get('/loyalty')).data,
+        'insignias': (await _apiService.get('/badges')).data,
+        'insigniasUsuario': (await _apiService.get('/badges/user')).data,
+        'retos': (await _apiService.get('/challenges')).data,
+        'retosUsuario': (await _apiService.get('/challenges/user')).data,
+        'racha': (await _apiService.post('/loyalty/streak', {})).data,
+      };
+      await CacheService.guardar(claveCache, datos);
+      _aplicarDatos(datos, desdeCache: null);
     } catch (e) {
-      setState(() => _isLoading = false);
+      // Sin conexión con el servidor: se muestra lo último que se guardó.
+      final cache = await CacheService.leer(claveCache);
+      if (cache != null) {
+        _aplicarDatos(cache.datos as Map, desdeCache: cache.guardado);
+      } else if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  void _aplicarDatos(Map datos, {required DateTime? desdeCache}) {
+    if (!mounted) return;
+    final puntos = (datos['puntos'] as List)
+        .fold<int>(0, (sum, p) => sum + ((p['points'] ?? 0) as num).toInt());
+    setState(() {
+      _totalXp = puntos;
+      // De menor a mayor XP requerido, para que se lea como una progresión.
+      _todasInsignias = List.of(datos['insignias'] as List)
+        ..sort((a, b) => ((a['xp_required'] ?? 0) as num).compareTo((b['xp_required'] ?? 0) as num));
+      _insigniasObtenidas = datos['insigniasUsuario'];
+      _todosRetos = datos['retos'];
+      _retosUsuario = datos['retosUsuario'];
+      _racha = datos['racha'];
+      _desdeCache = desdeCache;
+      _isLoading = false;
+    });
   }
 
   bool _tieneInsignia(int badgeId) {
@@ -106,16 +129,24 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-          : RefreshIndicator(
-              onRefresh: _cargarDatos,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildRachaTab(),
-                  _buildInsigniasTab(),
-                  _buildRetosTab(),
-                ],
-              ),
+          : Column(
+              children: [
+                if (_desdeCache != null)
+                  AvisoSinConexion(desde: _desdeCache!, onReintentar: _cargarDatos),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _cargarDatos,
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildRachaTab(),
+                        _buildInsigniasTab(),
+                        _buildRetosTab(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
     );
   }

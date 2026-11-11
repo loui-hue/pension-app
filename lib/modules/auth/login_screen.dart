@@ -46,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await _apiService.setToken(token);
       const storage = FlutterSecureStorage();
       await storage.write(key: AppConstants.userKey, value: role);
+      await storage.write(key: AppConstants.userIdKey, value: '${response.data['user']['id']}');
 
       if (!mounted) return;
       // Comensal registrado por el mesero: primero crea su propia contraseña.
