@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 import '../../core/constants/app_constants.dart';
 
 class PedidosScreen extends StatefulWidget {
@@ -438,9 +439,7 @@ class _PedidosScreenState extends State<PedidosScreen>
         child: const Icon(Icons.home, color: Colors.white),
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppTheme.primary),
-            )
+          ? const Cargando()
           : TabBarView(
               controller: _tabController,
               children: [

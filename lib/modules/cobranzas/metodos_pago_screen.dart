@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 import 'qr_imagen.dart';
 
 /// Configuración (solo administrador) de los datos de cobro de la pensión:
@@ -141,7 +142,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Métodos de pago')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

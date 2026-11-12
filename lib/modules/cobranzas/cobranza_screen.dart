@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 import 'qr_imagen.dart';
 
 class CobranzaScreen extends StatefulWidget {
@@ -43,9 +44,10 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
   Future<void> _cargarDatos() async {
     await _apiService.init();
     try {
-      final resPagos = await _apiService.get('/payments');
-      final resMetodos = await _apiService.get('/payment-methods');
-      final resPedidos = await _apiService.get('/orders');
+      final r = await Future.wait([_apiService.get('/payments'), _apiService.get('/payment-methods'), _apiService.get('/orders')]);
+      final resPagos = r[0];
+      final resMetodos = r[1];
+      final resPedidos = r[2];
       final pagos = resPagos.data as List;
       final pendientes = pagos.where((p) => p['status'] == 'pendiente').toList();
       final conPagoPendiente = pendientes.map((p) => p['order_id']).toSet();
@@ -378,7 +380,7 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+            ? const Cargando()
             : TabBarView(
                 children: [
                   _buildPorCobrar(),

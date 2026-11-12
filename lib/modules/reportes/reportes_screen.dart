@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 
 class ReportesScreen extends StatefulWidget {
   const ReportesScreen({super.key});
@@ -30,31 +31,49 @@ class _ReportesScreenState extends State<ReportesScreen> {
   String _fecha(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  Future<void> _cargarReporte() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    await _apiService.init();
+  // Reportes ya consultados en esta visita, por rango: al volver a un periodo se
+  // muestra al instante mientras se actualiza.
+  final Map<String, Map> _porRango = {};
+  bool _actualizando = false;
 
+  Future<void> _cargarReporte() async {
     final hoy = DateTime.now();
     final desde = _rangoPersonalizado?.start ?? hoy.subtract(Duration(days: _periodos[_periodo]!));
     final hasta = _rangoPersonalizado?.end ?? hoy;
+    final clave = '${_fecha(desde)}_${_fecha(hasta)}';
+
+    // Si ya hay algo en pantalla se mantiene y solo aparece la barra fina arriba
+    // (antes la pantalla se vaciaba en cada cambio de periodo: el destello).
+    setState(() {
+      _error = null;
+      if (_porRango[clave] != null) _reporte = _porRango[clave];
+      if (_reporte != null) {
+        _actualizando = true;
+      } else {
+        _isLoading = true;
+      }
+    });
+    await _apiService.init();
 
     try {
-      final res = await _apiService.get(
-        '/reports/dashboard?from=${_fecha(desde)}&to=${_fecha(hasta)}',
-      );
+      final res = await _apiService.get('/reports/dashboard?from=${_fecha(desde)}&to=${_fecha(hasta)}');
+      if (!mounted) return;
+      _porRango[clave] = res.data;
       setState(() {
         _reporte = res.data;
         _isLoading = false;
+        _actualizando = false;
       });
-    } on DioException catch (e) {
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.response?.data is Map
-            ? e.response!.data['message'] ?? 'No se pudo cargar el reporte'
-            : 'No se pudo cargar el reporte';
+        if (_reporte == null) {
+          _error = e is DioException && e.response?.data is Map
+              ? e.response!.data['message'] ?? 'No se pudo cargar el reporte'
+              : 'No se pudo cargar el reporte';
+        }
         _isLoading = false;
+        _actualizando = false;
       });
     }
   }
@@ -90,9 +109,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
       body: Column(
         children: [
           _buildSelectorPeriodo(),
+          BarraActualizando(activa: _actualizando),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+                ? const Cargando()
                 : _error != null
                     ? Center(
                         child: Text(_error!, style: const TextStyle(color: Colors.white70)),

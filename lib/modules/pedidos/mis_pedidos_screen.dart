@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 import '../../core/widgets/aviso_sin_conexion.dart';
 
 class MisPedidosScreen extends StatefulWidget {
@@ -105,7 +106,7 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
             AvisoSinConexion(desde: _desdeCache!, onReintentar: _cargarPedidos),
           Expanded(
             child: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : _pedidos.isEmpty
               ? Center(
                   child: Column(

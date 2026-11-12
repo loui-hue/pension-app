@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 import '../../core/widgets/aviso_sin_conexion.dart';
 
 class FidelizacionScreen extends StatefulWidget {
@@ -145,7 +146,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : Column(
               children: [
                 // Barra fina mientras se actualiza (en vez de vaciar la pantalla).

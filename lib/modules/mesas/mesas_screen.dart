@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 
 class MesasScreen extends StatefulWidget {
   const MesasScreen({super.key});
@@ -129,7 +130,7 @@ class _MesasScreenState extends State<MesasScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : Column(
               children: [
                 // Leyenda

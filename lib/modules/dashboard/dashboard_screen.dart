@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
@@ -42,7 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         future: _servidor,
         builder: (context, estado) {
           if (estado.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+            return const Cargando();
           }
           return Column(
             children: [

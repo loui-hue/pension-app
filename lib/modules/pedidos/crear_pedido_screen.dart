@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 
 class CrearPedidoScreen extends StatefulWidget {
   const CrearPedidoScreen({super.key});
@@ -54,11 +55,16 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
       const storage = FlutterSecureStorage();
       _role = await storage.read(key: AppConstants.userKey) ?? AppConstants.roleCliente;
 
-      final resProd = await _apiService.get('/products');
-      final resMesas = await _apiService.get('/tables');
-      final resComensales = _debeElegirComensal
-          ? await _apiService.get('/users?role=${AppConstants.roleCliente}')
-          : null;
+      // Las tres consultas a la vez (antes una tras otra): la pantalla aparece antes.
+      final respuestas = await Future.wait([
+        _apiService.get('/products'),
+        _apiService.get('/tables'),
+        if (_debeElegirComensal) _apiService.get('/users?role=${AppConstants.roleCliente}'),
+      ]);
+      final resProd = respuestas[0];
+      final resMesas = respuestas[1];
+      final resComensales = respuestas.length > 2 ? respuestas[2] : null;
+      if (!mounted) return;
       setState(() {
         _productos = resProd.data;
         _mesas = resMesas.data
@@ -201,7 +207,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
       // botón de confirmar queda fijo abajo. Así la lista de productos usa casi todo el
       // alto del celular y el teclado de "Notas" no aplasta la pantalla.
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               children: [
