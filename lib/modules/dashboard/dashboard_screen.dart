@@ -5,8 +5,17 @@ import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  // Se averigua una sola vez al abrir el menú (pensión o portal). Antes se repetía en
+  // cada cambio de pantalla y el menú se vaciaba un instante: eso era el "destello".
+  late final Future<void> _servidor = ApiService.elegirServidor();
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +39,7 @@ class DashboardScreen extends StatelessWidget {
       ),
       // Antes de armar el menú se averigua si está en la pensión o fuera (portal).
       body: FutureBuilder(
-        future: ApiService.elegirServidor(),
+        future: _servidor,
         builder: (context, estado) {
           if (estado.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
@@ -51,7 +60,12 @@ class DashboardScreen extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
               ),
-              if (ApiService.modoRemoto) const _AvisoModoRemoto(),
+              if (ApiService.modoRemoto && role == AppConstants.roleCliente) const _AvisoModoRemoto(),
+              // El personal opera solo dentro de la red de la pensión: fuera de ella se
+              // explica en vez de mostrar un menú vacío.
+              if (ApiService.modoRemoto && role != AppConstants.roleCliente)
+                const Expanded(child: _AvisoPersonalFuera())
+              else
               Expanded(
                 child: GridView.count(
                   crossAxisCount: 2,
@@ -131,6 +145,50 @@ class DashboardScreen extends StatelessWidget {
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvisoPersonalFuera extends StatelessWidget {
+  const _AvisoPersonalFuera();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off, size: 72, color: AppTheme.primary),
+            const SizedBox(height: 16),
+            const Text(
+              'Estás fuera de la red de la pensión',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppTheme.textLight, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Los pedidos, la cocina y la caja funcionan conectados al Wi-Fi '
+              '"Pension-Dona-Roberta", para que la atención no dependa de Internet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await ApiService.elegirServidor(forzar: true);
+                if (context.mounted) {
+                  final role = ModalRoute.of(context)!.settings.arguments;
+                  Navigator.pushReplacementNamed(context, '/dashboard', arguments: role);
+                }
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Ya estoy conectado, reintentar'),
             ),
           ],
         ),

@@ -28,6 +28,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
   bool _uniendoReto = false;
   // Fecha de la copia guardada cuando no hay conexión (null = datos en vivo).
   DateTime? _desdeCache;
+  bool _actualizando = false;
 
   @override
   void initState() {
@@ -37,30 +38,46 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
   }
 
   Future<void> _cargarDatos() async {
-    await _apiService.init();
     const storage = FlutterSecureStorage();
     final usuarioId = int.tryParse(await storage.read(key: AppConstants.userIdKey) ?? '');
     final claveCache = CacheService.clave(usuarioId, 'fidelizacion');
+    final cache = await CacheService.leer(claveCache);
 
+    // Primero lo guardado en el celular, al instante (sin pantalla en blanco);
+    // luego se actualiza con el servidor y solo se ve una barra fina arriba.
+    if (_isLoading && cache != null) _aplicarDatos(cache.datos as Map, desdeCache: null);
+    if (mounted) setState(() => _actualizando = true);
+
+    await _apiService.init();
     try {
+      // Las seis consultas a la vez, no una tras otra: carga más rápido.
+      final r = await Future.wait([
+        _apiService.get('/loyalty'),
+        _apiService.get('/badges'),
+        _apiService.get('/badges/user'),
+        _apiService.get('/challenges'),
+        _apiService.get('/challenges/user'),
+        _apiService.post('/loyalty/streak', {}),
+      ]);
       final datos = {
-        'puntos': (await _apiService.get('/loyalty')).data,
-        'insignias': (await _apiService.get('/badges')).data,
-        'insigniasUsuario': (await _apiService.get('/badges/user')).data,
-        'retos': (await _apiService.get('/challenges')).data,
-        'retosUsuario': (await _apiService.get('/challenges/user')).data,
-        'racha': (await _apiService.post('/loyalty/streak', {})).data,
+        'puntos': r[0].data,
+        'insignias': r[1].data,
+        'insigniasUsuario': r[2].data,
+        'retos': r[3].data,
+        'retosUsuario': r[4].data,
+        'racha': r[5].data,
       };
       await CacheService.guardar(claveCache, datos);
       _aplicarDatos(datos, desdeCache: null);
     } catch (e) {
       // Sin conexión con el servidor: se muestra lo último que se guardó.
-      final cache = await CacheService.leer(claveCache);
       if (cache != null) {
         _aplicarDatos(cache.datos as Map, desdeCache: cache.guardado);
       } else if (mounted) {
         setState(() => _isLoading = false);
       }
+    } finally {
+      if (mounted) setState(() => _actualizando = false);
     }
   }
 
@@ -131,6 +148,13 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
           : Column(
               children: [
+                // Barra fina mientras se actualiza (en vez de vaciar la pantalla).
+                SizedBox(
+                  height: 3,
+                  child: _actualizando
+                      ? const LinearProgressIndicator(color: AppTheme.primary, backgroundColor: Colors.transparent)
+                      : null,
+                ),
                 if (_desdeCache != null)
                   AvisoSinConexion(desde: _desdeCache!, onReintentar: _cargarDatos),
                 Expanded(

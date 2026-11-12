@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -20,6 +21,15 @@ class AppTheme {
         surface: surface,
       ),
       scaffoldBackgroundColor: background,
+      // Transición de deslizamiento: la pantalla nueva entra opaca desde la derecha.
+      // La animación por defecto de Android superponía las dos pantallas semitransparentes
+      // y se veía como un destello sobre el fondo oscuro.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
       textTheme: GoogleFonts.poppinsTextTheme().apply(
         bodyColor: textLight,
         displayColor: textLight,

@@ -26,11 +26,20 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
   }
 
   Future<void> _cargarPedidos() async {
-    await _apiService.init();
     const storage = FlutterSecureStorage();
     final usuarioId = int.tryParse(await storage.read(key: AppConstants.userIdKey) ?? '');
     final claveCache = CacheService.clave(usuarioId, 'mis_pedidos');
 
+    // Primero el historial guardado, al instante; luego se actualiza con el servidor.
+    final guardado = await CacheService.leer(claveCache);
+    if (_isLoading && guardado != null && mounted) {
+      setState(() {
+        _pedidos = guardado.datos as List;
+        _isLoading = false;
+      });
+    }
+
+    await _apiService.init();
     try {
       final res = await _apiService.get('/orders/my-orders');
       await CacheService.guardar(claveCache, res.data);
