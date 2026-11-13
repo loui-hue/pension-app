@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 
 class UsuariosScreen extends StatefulWidget {
   const UsuariosScreen({super.key});
@@ -68,7 +69,7 @@ class _UsuariosScreenState extends State<UsuariosScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : _usuarios.isEmpty
               ? const Center(
                   child: Text('No hay usuarios', style: TextStyle(color: AppTheme.textLight)),

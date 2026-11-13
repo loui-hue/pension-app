@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/cache_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
+import '../../core/widgets/aviso_sin_conexion.dart';
 
 class MisPedidosScreen extends StatefulWidget {
   const MisPedidosScreen({super.key});
@@ -13,6 +18,7 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
   final _apiService = ApiService();
   List _pedidos = [];
   bool _isLoading = true;
+  DateTime? _desdeCache;
 
   @override
   void initState() {
@@ -21,15 +27,40 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
   }
 
   Future<void> _cargarPedidos() async {
+    const storage = FlutterSecureStorage();
+    final usuarioId = int.tryParse(await storage.read(key: AppConstants.userIdKey) ?? '');
+    final claveCache = CacheService.clave(usuarioId, 'mis_pedidos');
+
+    // Primero el historial guardado, al instante; luego se actualiza con el servidor.
+    final guardado = await CacheService.leer(claveCache);
+    if (_isLoading && guardado != null && mounted) {
+      setState(() {
+        _pedidos = guardado.datos as List;
+        _isLoading = false;
+      });
+    }
+
     await _apiService.init();
     try {
       final res = await _apiService.get('/orders/my-orders');
+      await CacheService.guardar(claveCache, res.data);
+      if (!mounted) return;
       setState(() {
         _pedidos = res.data;
+        _desdeCache = null;
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      // Sin conexión: el historial guardado la última vez.
+      final cache = await CacheService.leer(claveCache);
+      if (!mounted) return;
+      setState(() {
+        if (cache != null) {
+          _pedidos = cache.datos as List;
+          _desdeCache = cache.guardado;
+        }
+        _isLoading = false;
+      });
     }
   }
 
@@ -69,8 +100,13 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
           )
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+      body: Column(
+        children: [
+          if (_desdeCache != null)
+            AvisoSinConexion(desde: _desdeCache!, onReintentar: _cargarPedidos),
+          Expanded(
+            child: _isLoading
+          ? const Cargando()
           : _pedidos.isEmpty
               ? Center(
                   child: Column(
@@ -163,6 +199,9 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
                     );
                   },
                 ),
+          ),
+        ],
+      ),
     );
   }
 }
