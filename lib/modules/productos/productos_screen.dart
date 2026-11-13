@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/widgets/transicion_carga.dart';
 
 class ProductosScreen extends StatefulWidget {
   const ProductosScreen({super.key});
@@ -26,8 +27,9 @@ class _ProductosScreenState extends State<ProductosScreen> {
   Future<void> _cargarDatos() async {
     await _apiService.init();
     try {
-      final resProd = await _apiService.get('/products');
-      final resCat = await _apiService.get('/categories');
+      final r = await Future.wait([_apiService.get('/products'), _apiService.get('/categories')]);
+      final resProd = r[0];
+      final resCat = r[1];
       setState(() {
         _productos = resProd.data;
         _categorias = resCat.data;
@@ -108,7 +110,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
+          ? const Cargando()
           : Column(
               children: [
                 // Tabs de categorías
