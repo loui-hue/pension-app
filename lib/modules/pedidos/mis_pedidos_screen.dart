@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
+import '../../core/services/consulta_periodica.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 import '../../core/widgets/aviso_sin_conexion.dart';
@@ -19,20 +20,32 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
   List _pedidos = [];
   bool _isLoading = true;
   DateTime? _desdeCache;
+  late final ConsultaPeriodica _consulta;
 
   @override
   void initState() {
     super.initState();
     _cargarPedidos();
+    _consulta = ConsultaPeriodica(
+      alConsultar: () => _cargarPedidos(silencioso: true),
+      puedeConsultar: () => mounted && (ModalRoute.of(context)?.isCurrent ?? false),
+    )..iniciar();
   }
 
-  Future<void> _cargarPedidos() async {
+  @override
+  void dispose() {
+    _consulta.detener();
+    super.dispose();
+  }
+
+  // silencioso: la consulta periódica; solo redibuja si algo cambió.
+  Future<void> _cargarPedidos({bool silencioso = false}) async {
     const storage = FlutterSecureStorage();
     final usuarioId = int.tryParse(await storage.read(key: AppConstants.userIdKey) ?? '');
     final claveCache = CacheService.clave(usuarioId, 'mis_pedidos');
 
     // Primero el historial guardado, al instante; luego se actualiza con el servidor.
-    final guardado = await CacheService.leer(claveCache);
+    final guardado = silencioso ? null : await CacheService.leer(claveCache);
     if (_isLoading && guardado != null && mounted) {
       setState(() {
         _pedidos = guardado.datos as List;
@@ -45,12 +58,14 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
       final res = await _apiService.get('/orders/my-orders');
       await CacheService.guardar(claveCache, res.data);
       if (!mounted) return;
+      if (silencioso && _desdeCache == null && !ConsultaPeriodica.cambio(_pedidos, res.data)) return;
       setState(() {
         _pedidos = res.data;
         _desdeCache = null;
         _isLoading = false;
       });
     } catch (e) {
+      if (silencioso) return;
       // Sin conexión: el historial guardado la última vez.
       final cache = await CacheService.leer(claveCache);
       if (!mounted) return;
