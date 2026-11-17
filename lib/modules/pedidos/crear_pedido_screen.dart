@@ -26,6 +26,9 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
   bool _isLoading = true;
   bool _enviando = false;
   bool _carritoRecibido = false;
+  /// Pedido pendiente que se está modificando (null = pedido nuevo).
+  Map? _pedido;
+  bool get _modificando => _pedido != null;
 
   @override
   void initState() {
@@ -40,6 +43,17 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args != null && args is Map<int, int>) {
         _carrito = Map<int, int>.from(args);
+        _carritoRecibido = true;
+      } else if (args is Map && args['pedido'] is Map) {
+        // Modificar: se precargan los platos, la mesa, el comensal y las notas.
+        _pedido = args['pedido'] as Map;
+        for (final item in (_pedido!['items'] as List? ?? [])) {
+          final id = item['product_id'] as int;
+          _carrito[id] = (_carrito[id] ?? 0) + (item['quantity'] as int);
+        }
+        _mesaSeleccionada = _pedido!['table_id'];
+        _comensalSeleccionado = _pedido!['user'];
+        _notas = _pedido!['notes'] ?? '';
         _carritoRecibido = true;
       }
     }
@@ -67,8 +81,9 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
       if (!mounted) return;
       setState(() {
         _productos = resProd.data;
+        // Al modificar, la mesa del pedido (ocupada por él mismo) también se ofrece.
         _mesas = resMesas.data
-            .where((m) => m['status'] == 'disponible')
+            .where((m) => m['status'] == 'disponible' || m['id'] == _mesaSeleccionada)
             .toList();
         _comensales = resComensales?.data ?? [];
         _isLoading = false;
@@ -152,21 +167,31 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         'quantity': e.value,
       }).toList();
 
-      await _apiService.post('/orders', {
-        'table_id': _mesaSeleccionada,
-        'notes': _notas,
-        'items': items,
-        if (_debeElegirComensal) 'user_id': _comensalSeleccionado!['id'],
-      });
+      if (_modificando) {
+        await _apiService.put('/orders/${_pedido!['id']}', {
+          'table_id': _mesaSeleccionada,
+          'notes': _notas,
+          'items': items,
+        });
+      } else {
+        await _apiService.post('/orders', {
+          'table_id': _mesaSeleccionada,
+          'notes': _notas,
+          'items': items,
+          if (_debeElegirComensal) 'user_id': _comensalSeleccionado!['id'],
+        });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Pedido enviado exitosamente!'),
+          SnackBar(
+            content: Text(_modificando
+                ? 'Pedido #${_pedido!['id']} modificado'
+                : '¡Pedido enviado exitosamente!'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true);
       }
     } catch (e) {
       final mensaje = e is DioException && e.response?.data is Map
@@ -186,7 +211,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Nuevo Pedido'),
+        title: Text(_modificando ? 'Modificar #${_pedido!['id']}' : 'Nuevo Pedido'),
         actions: [
           Center(
             child: Padding(
@@ -214,11 +239,12 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
                 // Selector de comensal (solo personal)
                 if (_debeElegirComensal) ...[
                   InkWell(
-                    onTap: _elegirComensal,
+                    // Al modificar, el comensal no cambia (el pedido ya es suyo).
+                    onTap: _modificando ? null : _elegirComensal,
                     borderRadius: BorderRadius.circular(12),
                     child: InputDecorator(
                       decoration: _decoracionCampo('Comensal', Icons.person)
-                          .copyWith(suffixIcon: const Icon(Icons.search, color: AppTheme.accent)),
+                          .copyWith(suffixIcon: _modificando ? null : const Icon(Icons.search, color: AppTheme.accent)),
                       child: Text(
                         _comensalSeleccionado == null
                             ? 'Toca para buscar al comensal'
@@ -275,7 +301,8 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
                     ]),
                 const SizedBox(height: 12),
                 // Notas
-                TextField(
+                TextFormField(
+                  initialValue: _notas,
                   style: const TextStyle(color: AppTheme.textLight),
                   maxLines: 2,
                   minLines: 1,
@@ -306,7 +333,9 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                         )
                       : Text(
-                          _cantidadItems == 0
+                          _modificando
+                              ? 'Guardar cambios — Bs. ${_total.toStringAsFixed(2)}'
+                              : _cantidadItems == 0
                               ? 'Confirmar Pedido — Bs. ${_total.toStringAsFixed(2)}'
                               : 'Confirmar $_cantidadItems ${_cantidadItems == 1 ? 'producto' : 'productos'} — Bs. ${_total.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 16),
