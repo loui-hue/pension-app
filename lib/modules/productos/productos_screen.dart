@@ -47,6 +47,9 @@ class _ProductosScreenState extends State<ProductosScreen> {
     ).toList();
   }
 
+  bool get _esMenuDelDia =>
+      _categoriaSeleccionada > 0 && _categorias[_categoriaSeleccionada - 1]['name'] == 'Menú del día';
+
   int get _totalCarrito => _carrito.values.fold(0, (a, b) => a + b);
 
   double get _totalPrecio {
@@ -147,6 +150,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                     },
                   ),
                 ),
+                if (_esMenuDelDia) _AvisoMenuDelDia(hayMenu: _productosFiltrados.isNotEmpty),
                 // Lista de productos
                 Expanded(
                   child: ListView.builder(
@@ -282,6 +286,42 @@ class _ProductosScreenState extends State<ProductosScreen> {
                   ),
               ],
             ),
+    );
+  }
+}
+/// Encabezado de la pestaña Menú del día: el servidor ya envía solo el menú de
+/// hoy (lunes a sábado); el domingo la pensión no atiende.
+class _AvisoMenuDelDia extends StatelessWidget {
+  final bool hayMenu;
+  const _AvisoMenuDelDia({required this.hayMenu});
+
+  static const _dias = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+
+  @override
+  Widget build(BuildContext context) {
+    final dia = _dias[DateTime.now().weekday - 1];
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_today, color: AppTheme.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              hayMenu
+                  ? 'Menú del $dia'
+                  : 'Hoy $dia no hay menú del día: la pensión atiende de lunes a sábado.',
+              style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
