@@ -124,9 +124,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     };
 
     var items = allItems[role] ?? [];
-    // Fuera de la pensión (portal en la nube) solo se puede consultar.
+    // Fuera de la pensión (portal en la nube) solo se puede consultar: el menú
+    // (sin pedir), los pedidos propios y la fidelización.
     if (ApiService.modoRemoto) {
-      items = items.where((i) => i.route == '/mis-pedidos' || i.route == '/fidelizacion').toList();
+      const soloConsulta = ['/productos', '/mis-pedidos', '/fidelizacion'];
+      items = items.where((i) => soloConsulta.contains(i.route)).toList();
     }
     return items.map((item) => _buildCard(item, context, role)).toList();
   }
@@ -224,7 +226,7 @@ class _AvisoModoRemoto extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Estás fuera de la pensión: puedes consultar tu avance.'
+              'Estás fuera de la pensión: puedes ver el menú y consultar tu avance.'
               '${fecha != null ? '\nDatos actualizados ${CacheService.describirFecha(fecha)}.' : ''}',
               style: const TextStyle(color: Colors.white, fontSize: 13),
             ),

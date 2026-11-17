@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
+import '../../core/services/cache_service.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 
@@ -24,8 +25,27 @@ class _ProductosScreenState extends State<ProductosScreen> {
   @override
   void initState() {
     super.initState();
+    // Si el teléfono entra o sale del Wi-Fi de la pensión, la pantalla pasa sola
+    // de "solo consulta" a poder pedir (y al revés).
+    ApiService.remoto.addListener(_cambioDeRed);
     _cargarDatos();
   }
+
+  @override
+  void dispose() {
+    ApiService.remoto.removeListener(_cambioDeRed);
+    super.dispose();
+  }
+
+  void _cambioDeRed() {
+    if (!mounted) return;
+    setState(() {
+      if (_fuera) _carrito.clear();
+    });
+  }
+
+  /// Fuera de la pensión (portal en la nube): la carta se ve, pero no se puede pedir.
+  bool get _fuera => ApiService.modoRemoto;
 
   Future<void> _cargarDatos() async {
     await _apiService.init();
@@ -137,7 +157,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
       appBar: AppBar(
         title: const Text('Menú'),
         actions: [
-          if (_carrito.isNotEmpty)
+          if (_carrito.isNotEmpty && !_fuera)
             Stack(
               children: [
                 IconButton(
@@ -205,6 +225,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                     },
                   ),
                 ),
+                if (_fuera) const _AvisoSoloConsulta(),
                 if (_esMenuDelDia)
                   _AvisoMenuDelDia(
                     dia: _diaVisto ?? _hoy,
@@ -285,9 +306,11 @@ class _ProductosScreenState extends State<ProductosScreen> {
                                             ),
                                           ),
                                         ),
-                                        if (_soloVer)
+                                        if (_soloVer || _fuera)
                                           Text(
-                                            'Se pide el ${_AvisoMenuDelDia.dias[_diaVisto! - 1]}',
+                                            _soloVer
+                                                ? 'Se pide el ${_AvisoMenuDelDia.dias[_diaVisto! - 1]}'
+                                                : 'Se pide en la pensión',
                                             style: const TextStyle(color: AppTheme.accent, fontSize: 12),
                                           )
                                         else
@@ -330,7 +353,7 @@ class _ProductosScreenState extends State<ProductosScreen> {
                   ),
                 ),
                 // Botón ir al carrito
-                if (_carrito.isNotEmpty)
+                if (_carrito.isNotEmpty && !_fuera)
                   Container(
                     padding: const EdgeInsets.all(16),
                     child: SizedBox(
@@ -413,6 +436,36 @@ class _AvisoMenuDelDia extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Fuera de la pensión: la carta se puede consultar para ver las opciones del día,
+/// pero los pedidos se hacen en la pensión (conectado a su Wi-Fi).
+class _AvisoSoloConsulta extends StatelessWidget {
+  const _AvisoSoloConsulta();
+
+  @override
+  Widget build(BuildContext context) {
+    final fecha = ApiService.portalSincronizadoEn;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: const Color(0xFF1E3A5F), borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_done, color: Colors.lightBlueAccent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Estás fuera de la pensión: puedes ver el menú. Para pedir, acércate a la pensión.'
+              '${fecha != null ? '\nCarta actualizada ${CacheService.describirFecha(fecha)}.' : ''}',
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
       ),
     );
   }
