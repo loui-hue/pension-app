@@ -11,6 +11,7 @@ import 'modules/pedidos/crear_pedido_screen.dart';
 import 'modules/pedidos/mis_pedidos_screen.dart';
 import 'modules/cobranzas/cobranza_screen.dart';
 import 'modules/fidelizacion/fidelizacion_screen.dart';
+import 'modules/fidelizacion/gestionar_retos_screen.dart';
 import 'modules/mesas/mesas_screen.dart';
 import 'modules/clientes/usuarios_screen.dart';
 import 'modules/reportes/reportes_screen.dart';
@@ -61,6 +62,7 @@ class MyApp extends StatelessWidget {
         '/mis-pedidos': (context) => const MisPedidosScreen(),
         '/cobranza': (context) => const CobranzaScreen(),
         '/fidelizacion': (context) => const FidelizacionScreen(),
+        '/gestionar-retos': (context) => const GestionarRetosScreen(),
         '/mesas': (context) => const MesasScreen(),
         '/usuarios': (context) => const UsuariosScreen(),
         '/reportes': (context) => const ReportesScreen(),

@@ -99,7 +99,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _MenuItem(icon: Icons.table_restaurant, label: 'Mesas', route: '/mesas'),
         _MenuItem(icon: Icons.receipt_long, label: 'Pedidos', route: '/pedidos'),
         _MenuItem(icon: Icons.payment, label: 'Cobranza', route: '/cobranza'),
-        _MenuItem(icon: Icons.star, label: 'Fidelización', route: '/fidelizacion'),
+        // El administrador no es comensal: en vez de su propia fidelización, gestiona los retos.
+        _MenuItem(icon: Icons.emoji_events, label: 'Gestionar retos', route: '/gestionar-retos'),
         _MenuItem(icon: Icons.qr_code, label: 'Métodos de pago', route: '/metodos-pago'),
       ],
       AppConstants.roleMesero: [
