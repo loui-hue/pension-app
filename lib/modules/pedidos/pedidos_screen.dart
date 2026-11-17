@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/services/consulta_periodica.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
@@ -19,23 +20,32 @@ class _PedidosScreenState extends State<PedidosScreen>
   bool _isLoading = true;
   late TabController _tabController;
   String _role = '';
+  late final ConsultaPeriodica _consulta;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _cargarDatos();
+    _consulta = ConsultaPeriodica(
+      alConsultar: () => _cargarDatos(silencioso: true),
+      puedeConsultar: () => mounted && (ModalRoute.of(context)?.isCurrent ?? false),
+    )..iniciar();
   }
 
-  Future<void> _cargarDatos() async {
+  // silencioso: la consulta periódica; solo redibuja si algo cambió.
+  Future<void> _cargarDatos({bool silencioso = false}) async {
     await _apiService.init();
     try {
       final res = await _apiService.get('/orders');
+      if (!mounted) return;
+      if (silencioso && !ConsultaPeriodica.cambio(_pedidos, res.data)) return;
       setState(() {
         _pedidos = res.data;
         _isLoading = false;
       });
     } catch (e) {
+      if (silencioso || !mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -454,6 +464,7 @@ class _PedidosScreenState extends State<PedidosScreen>
 
   @override
   void dispose() {
+    _consulta.detener();
     _tabController.dispose();
     super.dispose();
   }

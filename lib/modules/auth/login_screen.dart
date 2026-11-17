@@ -34,6 +34,10 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Se revisa la red justo ahora: el teléfono pudo haber entrado o salido del
+      // Wi-Fi de la pensión mientras estaba en esta pantalla.
+      await _apiService.init();
+      await ApiService.elegirServidor(forzar: true);
       final response = await _apiService.post('/login', {
         'email': _emailController.text.trim().toLowerCase(),
         'password': _passwordController.text,
@@ -59,9 +63,12 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacementNamed(context, '/dashboard', arguments: role);
       }
     } on DioException catch (e) {
-      _showError(e.response?.data['message'] ?? 'Error de conexión');
+      final datos = e.response?.data;
+      _showError(datos is Map && datos['message'] != null
+          ? '${datos['message']}'
+          : 'Sin conexión: conéctate al Wi-Fi de la pensión o a Internet');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

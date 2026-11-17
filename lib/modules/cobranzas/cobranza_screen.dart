@@ -5,6 +5,7 @@ import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 import 'qr_imagen.dart';
+import '../../core/services/consulta_periodica.dart';
 
 class CobranzaScreen extends StatefulWidget {
   const CobranzaScreen({super.key});
@@ -25,11 +26,16 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
   // y avanza con el reloj local desde el momento de la carga.
   DateTime _cargadoEn = DateTime.now();
   Timer? _reloj;
+  late final ConsultaPeriodica _consulta;
 
   @override
   void initState() {
     super.initState();
     _cargarDatos();
+    _consulta = ConsultaPeriodica(
+      alConsultar: () => _cargarDatos(silencioso: true),
+      puedeConsultar: () => mounted && (ModalRoute.of(context)?.isCurrent ?? false),
+    )..iniciar();
     _reloj = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _pendientes.isNotEmpty) setState(() {});
     });
@@ -38,10 +44,12 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
   @override
   void dispose() {
     _reloj?.cancel();
+    _consulta.detener();
     super.dispose();
   }
 
-  Future<void> _cargarDatos() async {
+  // silencioso: la consulta periódica; solo redibuja si algo cambió.
+  Future<void> _cargarDatos({bool silencioso = false}) async {
     await _apiService.init();
     try {
       final r = await Future.wait([_apiService.get('/payments'), _apiService.get('/payment-methods'), _apiService.get('/orders')]);
@@ -51,6 +59,15 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
       final pagos = resPagos.data as List;
       final pendientes = pagos.where((p) => p['status'] == 'pendiente').toList();
       final conPagoPendiente = pendientes.map((p) => p['order_id']).toSet();
+      if (!mounted) return;
+      if (silencioso &&
+          !ConsultaPeriodica.cambio([_pagos, _pendientes, _porCobrar], [
+            pagos.where((p) => p['status'] != 'pendiente').toList(),
+            pendientes,
+            (resPedidos.data as List).where((o) => o['status'] != 'pagado' && o['status'] != 'cancelado' && !conPagoPendiente.contains(o['id'])).toList(),
+          ])) {
+        return;
+      }
       setState(() {
         _pagos = pagos.where((p) => p['status'] != 'pendiente').toList();
         _pendientes = pendientes;
@@ -66,6 +83,7 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (silencioso || !mounted) return;
       setState(() => _isLoading = false);
     }
   }

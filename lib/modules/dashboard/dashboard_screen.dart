@@ -16,6 +16,8 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   // Se averigua una sola vez al abrir el menú (pensión o portal). Antes se repetía en
   // cada cambio de pantalla y el menú se vaciaba un instante: eso era el "destello".
+  // Después, si el teléfono entra o sale del Wi-Fi de la pensión, el menú se
+  // rearma solo (escucha ApiService.remoto).
   late final Future<void> _servidor = ApiService.elegirServidor();
 
   @override
@@ -30,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               const storage = FlutterSecureStorage();
+              await ApiService().clearToken();
               await storage.deleteAll();
               if (context.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
@@ -45,7 +48,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (estado.connectionState != ConnectionState.done) {
             return const Cargando();
           }
-          return Column(
+          return ListenableBuilder(
+            listenable: Listenable.merge([ApiService.remoto, ApiService.fueraDeLaPension]),
+            builder: (context, _) => Column(
             children: [
               Container(
                 width: double.infinity,
@@ -64,7 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (ApiService.modoRemoto && role == AppConstants.roleCliente) const _AvisoModoRemoto(),
               // El personal opera solo dentro de la red de la pensión: fuera de ella se
               // explica en vez de mostrar un menú vacío.
-              if (ApiService.modoRemoto && role != AppConstants.roleCliente)
+              if (ApiService.fueraDeLaPension.value && role != AppConstants.roleCliente)
                 const Expanded(child: _AvisoPersonalFuera())
               else
               Expanded(
@@ -77,6 +82,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ],
+          ),
           );
         },
       ),

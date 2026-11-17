@@ -471,6 +471,16 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
     );
   }
 
+  /// Los retos de visitas, compras y gastronómicos avanzan solos cuando caja cobra
+  /// un pedido; los "especial" los registra la pensión.
+  String _textoAvance(Map reto, Map participacion, num progreso) {
+    const unidades = {'visitas': 'visitas', 'compras': 'pedidos', 'gastronomico': 'platos nuevos'};
+    final unidad = unidades[reto['type']];
+    if (unidad == null) return 'Progreso: ${progreso.toInt()}% · lo registra la pensión';
+    final lleva = participacion['pivot']?['current_count'] ?? 0;
+    return '$lleva de ${reto['goal'] ?? 1} $unidad · avanza solo al pagar';
+  }
+
   Widget _buildRetosTab() {
     if (_todosRetos.isEmpty) {
       return const Center(child: Text('No hay retos activos por el momento.'));
@@ -553,7 +563,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    completado ? '¡Reto completado!' : 'Progreso: ${progreso.toInt()}%',
+                    completado ? '¡Reto completado!' : _textoAvance(reto, progresoUsuario, progreso),
                     style: TextStyle(
                       color: completado ? Colors.green : AppTheme.textLight.withValues(alpha: 0.7),
                       fontSize: 12,

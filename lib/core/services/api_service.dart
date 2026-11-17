@@ -1,15 +1,24 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 
+/// Comunicación con el servidor. La app trabaja con dos servidores:
+/// - el de la pensión (red local, Wi-Fi "Pension-Dona-Roberta"): todo el sistema;
+/// - el portal en la nube: solo consultas del comensal fuera de la pensión.
+///
+/// El servidor se elige de nuevo cada vez que cambia la red (al entrar o salir del
+/// Wi-Fi), no solo al abrir la app: cada petición va al servidor vigente y, si la
+/// red se cayó, se vuelve a elegir y se reintenta en el que sí responde.
 class ApiService {
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
   ApiService._internal();
 
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  late Dio _dio;
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+  static Dio? _dioCreado;
+  static String? _token;
 
   /// Navegador de la app, para volver al login si la sesión deja de ser válida.
   static final navegador = GlobalKey<NavigatorState>();
@@ -17,84 +26,187 @@ class ApiService {
   // Servidor en uso: el de la pensión (red local) o el portal en la nube.
   static String _servidor = AppConstants.baseUrl;
   static DateTime? _elegidoEn;
+  static Future<void>? _eligiendo;
 
   /// true cuando la app está fuera de la pensión y consulta el portal en la nube.
-  static bool modoRemoto = false;
+  /// Las pantallas que dependen de esto (el menú) lo escuchan y se rearman solas.
+  static final ValueNotifier<bool> remoto = ValueNotifier(false);
+  static bool get modoRemoto => remoto.value;
+
+  /// true cuando el servidor de la pensión no responde (el teléfono no está en su
+  /// Wi-Fi). Para el personal, el menú muestra el aviso de que está fuera.
+  static final ValueNotifier<bool> fueraDeLaPension = ValueNotifier(false);
 
   /// Cuándo recibió el portal la última copia de la pensión (solo en modo remoto).
   static DateTime? portalSincronizadoEn;
 
-  /// Prueba primero la red de la pensión; si no responde, usa el portal en la nube.
-  /// La elección se recuerda 30 segundos para no probar en cada pantalla.
-  static Future<void> elegirServidor({bool forzar = false}) async {
-    if (!forzar && _elegidoEn != null && DateTime.now().difference(_elegidoEn!).inSeconds < 30) return;
+  /// Los tokens creados en el portal tienen id desde 1.000.000.000 (ver PortalSync).
+  static const int _primerIdPortal = 1000000000;
 
-    Future<Map?> ping(String base, int segundos) async {
-      try {
-        final r = await Dio(BaseOptions(
-          connectTimeout: Duration(seconds: segundos),
-          receiveTimeout: Duration(seconds: segundos),
-        )).get('$base/ping');
-        return r.data is Map ? r.data as Map : null;
-      } catch (_) {
-        return null;
-      }
+  static Future<Map?> _ping(String base, int segundos) async {
+    try {
+      final r = await Dio(BaseOptions(
+        connectTimeout: Duration(seconds: segundos),
+        receiveTimeout: Duration(seconds: segundos),
+      )).get('$base/ping');
+      return r.data is Map ? r.data as Map : null;
+    } catch (_) {
+      return null;
     }
-
-    if (await ping(AppConstants.baseUrl, 2) != null || AppConstants.portalUrl.isEmpty) {
-      _servidor = AppConstants.baseUrl;
-      modoRemoto = false;
-      portalSincronizadoEn = null;
-    } else {
-      final portal = await ping(AppConstants.portalUrl, 6);
-      if (portal != null) {
-        _servidor = AppConstants.portalUrl;
-        modoRemoto = true;
-        portalSincronizadoEn = DateTime.tryParse('${portal['sincronizado_en']}')?.toLocal();
-      } else {
-        // Ninguno responde: se deja el local y las pantallas muestran la caché.
-        _servidor = AppConstants.baseUrl;
-        modoRemoto = false;
-      }
-    }
-    _elegidoEn = DateTime.now();
   }
 
-  Future<void> init() async {
-    await elegirServidor();
-    final token = await _storage.read(key: AppConstants.tokenKey);
-    _dio = Dio(BaseOptions(
-      baseUrl: _servidor,
-      // Corto: fuera de la red de la pensión falla rápido y se muestra la caché.
+  /// Prueba primero la red de la pensión; si no responde, usa el portal en la nube
+  /// (solo para el comensal: el personal trabaja únicamente en la pensión).
+  /// Sin [forzar], la elección se reutiliza hasta que cambie la red.
+  static Future<void> elegirServidor({bool forzar = false}) {
+    if (!forzar && _elegidoEn != null && DateTime.now().difference(_elegidoEn!).inSeconds < 60) {
+      return Future.value();
+    }
+    // Varias pantallas pueden pedirlo a la vez: se hace una sola prueba.
+    return _eligiendo ??= _elegir().whenComplete(() => _eligiendo = null);
+  }
+
+  static Future<void> _elegir() async {
+    final rol = await _storage.read(key: AppConstants.userKey);
+    final puedeUsarPortal = AppConstants.portalUrl.isNotEmpty &&
+        (rol == null || rol == AppConstants.roleCliente);
+
+    var nuevoRemoto = false;
+    final fuera = await _ping(AppConstants.baseUrl, 2) == null;
+    if (fuera && puedeUsarPortal) {
+      final portal = await _ping(AppConstants.portalUrl, 6);
+      if (portal != null) {
+        nuevoRemoto = true;
+        portalSincronizadoEn = DateTime.tryParse('${portal['sincronizado_en']}')?.toLocal();
+      }
+      // Si ninguno responde se deja el local y las pantallas muestran la caché.
+    }
+    _servidor = nuevoRemoto ? AppConstants.portalUrl : AppConstants.baseUrl;
+    if (!nuevoRemoto) portalSincronizadoEn = null;
+    _elegidoEn = DateTime.now();
+    remoto.value = nuevoRemoto;
+    fueraDeLaPension.value = fuera;
+  }
+
+  /// Vigila la red mientras la app está abierta (ver [_VigilanteDeRed]).
+  static void vigilarRed() => _VigilanteDeRed().iniciar();
+
+  static Dio get _dio => _dioCreado ??= _crearDio();
+
+  static Dio _crearDio() {
+    final dio = Dio(BaseOptions(
+      // Corto: si la red se cayó falla rápido, se elige otro servidor o se muestra la caché.
       connectTimeout: const Duration(seconds: 4),
       receiveTimeout: const Duration(seconds: 10),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      },
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
     ));
-    _dio.interceptors.add(InterceptorsWrapper(
+    dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (opciones, handler) async {
+        await elegirServidor();
+        opciones.baseUrl = _servidor;
+        if (_token != null) opciones.headers['Authorization'] = 'Bearer $_token';
+        handler.next(opciones);
+      },
       onError: (error, handler) async {
-        // Sesión vencida o cerrada desde otro lado (p. ej. restablecieron la
-        // contraseña): se borra la sesión recordada y se vuelve al login.
-        if (error.response?.statusCode == 401 && error.requestOptions.path != '/login') {
-          await _storage.deleteAll();
-          navegador.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
-        }
+        final reintento = await _recuperar(error);
+        if (reintento != null) return handler.resolve(reintento);
         handler.next(error);
       },
     ));
+    return dio;
+  }
+
+  /// Intenta resolver un fallo causado por un cambio de red. Devuelve la respuesta
+  /// del reintento, o null si el error es real y debe llegar a la pantalla.
+  static Future<Response?> _recuperar(DioException error) async {
+    final o = error.requestOptions;
+    if (o.extra['reintento'] == true) return null;
+    o.extra['reintento'] = true;
+
+    // 1) No hubo conexión con el servidor (se salió o se entró al Wi-Fi): se elige
+    //    de nuevo y se reintenta si ahora corresponde otro. La petición no llegó a
+    //    enviarse, así que repetirla no duplica nada. Al portal solo van consultas.
+    final sinConexion = error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout;
+    if (sinConexion) {
+      final antes = _servidor;
+      await elegirServidor(forzar: true);
+      if (_servidor != antes && (_servidor == AppConstants.baseUrl || o.method == 'GET')) {
+        return _reintentar(o);
+      }
+      return null;
+    }
+
+    if (error.response?.statusCode != 401 || o.path == '/login') return null;
+
+    final idToken = int.tryParse((_token ?? '').split('|').first) ?? 0;
+    final tokenDelPortal = idToken >= _primerIdPortal;
+    final respondioPortal = o.baseUrl == AppConstants.portalUrl;
+
+    // 2) Sesión iniciada fuera (portal) y ahora está en la pensión: el servidor de la
+    //    pensión la valida con el portal y la acepta, sin pedir otra vez la contraseña.
+    if (tokenDelPortal && !respondioPortal) {
+      // Varias pantallas pueden recibir el 401 a la vez: se valida una sola vez.
+      final valida = await (_trayendoSesion ??= _traerSesion().whenComplete(() => _trayendoSesion = null));
+      if (valida == true) return await _reintentar(o);
+      // null: no se pudo comprobar (sin Internet en la pensión, red inestable). No se
+      // cierra la sesión: la pantalla muestra lo guardado y se reintenta en la siguiente.
+      if (valida == null) return null;
+    }
+
+    // 3) Sesión de la pensión que el portal todavía no recibió: no se cierra la
+    //    sesión, la pantalla muestra lo guardado hasta que llegue la copia.
+    if (!tokenDelPortal && respondioPortal) return null;
+
+    // 4) Sesión vencida o cerrada desde otro lado (p. ej. restablecieron la
+    //    contraseña): se borra la sesión recordada y se vuelve al login.
+    await _storage.deleteAll();
+    _token = null;
+    navegador.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
+    return null;
+  }
+
+  static Future<bool?>? _trayendoSesion;
+
+  /// Pide al servidor de la pensión que valide con el portal la sesión iniciada fuera.
+  /// true = aceptada; false = el portal la rechazó (sesión cerrada); null = no se pudo comprobar.
+  static Future<bool?> _traerSesion() async {
+    try {
+      await Dio(BaseOptions(
+        baseUrl: AppConstants.baseUrl,
+        connectTimeout: const Duration(seconds: 4),
+        receiveTimeout: const Duration(seconds: 15),
+        headers: {'Accept': 'application/json', 'Authorization': 'Bearer $_token'},
+      )).post('/portal/traer-sesion');
+      return true;
+    } on DioException catch (e) {
+      return e.response?.statusCode == 401 ? false : null;
+    }
+  }
+
+  static Future<Response?> _reintentar(RequestOptions o) async {
+    try {
+      return await _dio.fetch(o);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Carga la sesión guardada. Las pantallas lo llaman al abrir.
+  Future<void> init() async {
+    _token = await _storage.read(key: AppConstants.tokenKey);
+    _dio;
+    await elegirServidor();
   }
 
   Future<void> setToken(String token) async {
     await _storage.write(key: AppConstants.tokenKey, value: token);
-    _dio.options.headers['Authorization'] = 'Bearer $token';
+    _token = token;
   }
 
   Future<void> clearToken() async {
     await _storage.delete(key: AppConstants.tokenKey);
-    _dio.options.headers.remove('Authorization');
+    _token = null;
   }
 
   Future<Response> get(String path) async => await _dio.get(path);
@@ -114,5 +226,29 @@ class ApiService {
   Future<List<int>> getBytes(String path) async {
     final res = await _dio.get<List<int>>(path, options: Options(responseType: ResponseType.bytes));
     return res.data ?? [];
+  }
+}
+
+/// Revisa la red al volver a la app y cada 5 s mientras está abierta: si el teléfono
+/// entró o salió del Wi-Fi de la pensión, cambia de servidor solo.
+class _VigilanteDeRed with WidgetsBindingObserver {
+  bool _enPrimerPlano = true;
+
+  void iniciar() {
+    WidgetsBinding.instance.addObserver(this);
+    Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!_enPrimerPlano || ApiService._eligiendo != null) return;
+      // Se vuelve a elegir solo si la red de la pensión apareció (estando fuera)
+      // o desapareció (estando dentro).
+      final hayPension = await ApiService._ping(AppConstants.baseUrl, 2) != null;
+      if (hayPension == ApiService.fueraDeLaPension.value) await ApiService.elegirServidor(forzar: true);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _enPrimerPlano = state == AppLifecycleState.resumed;
+    // Al volver a la app el teléfono pudo cambiar de red mientras tanto.
+    if (_enPrimerPlano) ApiService.elegirServidor(forzar: true);
   }
 }
