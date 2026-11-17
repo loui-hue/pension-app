@@ -19,6 +19,8 @@ import 'modules/auth/cambiar_password_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Al entrar o salir del Wi-Fi de la pensión, la app cambia de servidor sola.
+  ApiService.vigilarRed();
   // Sesión recordada: si ya inició sesión, abre directo en su menú. Así el
   // comensal ve su avance (desde la caché) aunque esté fuera de la pensión.
   const storage = FlutterSecureStorage();
