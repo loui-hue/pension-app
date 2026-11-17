@@ -139,6 +139,12 @@ class _PedidosScreenState extends State<PedidosScreen>
     }
   }
 
+  /// Abre Nuevo Pedido con los platos, la mesa y las notas de este pedido.
+  Future<void> _modificarPedido(Map pedido) async {
+    final guardado = await Navigator.pushNamed(context, '/crear-pedido', arguments: {'pedido': pedido});
+    if (guardado == true && mounted) _cargarDatos(silencioso: true);
+  }
+
   Widget _buildBotones(Map pedido) {
     final status = pedido['status'];
     final id = pedido['id'];
@@ -159,11 +165,12 @@ class _PedidosScreenState extends State<PedidosScreen>
       return const SizedBox.shrink();
     }
 
-    // MESERO y ADMIN
+    // MESERO, CAJA y ADMIN
     if (status == 'pendiente') {
-      return Row(
+      return Column(
         children: [
-          Expanded(
+          SizedBox(
+            width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => _actualizarEstado(id, 'en_preparacion'),
               icon: const Icon(Icons.send, size: 16),
@@ -171,12 +178,27 @@ class _PedidosScreenState extends State<PedidosScreen>
               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
             ),
           ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: () => _confirmarCancelacion(id),
-            icon: const Icon(Icons.cancel, size: 16),
-            label: const Text('Cancelar'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              // Cambio de último momento del comensal: mientras no pasó a cocina se
+              // pueden agregar, quitar o cambiar platos.
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _modificarPedido(pedido),
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Modificar'),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade800),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: () => _confirmarCancelacion(id),
+                icon: const Icon(Icons.cancel, size: 16),
+                label: const Text('Cancelar'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              ),
+            ],
           ),
         ],
       );
