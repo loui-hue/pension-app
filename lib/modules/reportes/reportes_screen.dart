@@ -124,6 +124,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                           children: [
                             _buildResumen(),
                             const SizedBox(height: 20),
+                            _buildVentasPorMetodo(),
                             _buildVentasPorDia(),
                             const SizedBox(height: 20),
                             _buildTopProductos(),
@@ -370,6 +371,52 @@ class _ReportesScreenState extends State<ReportesScreen> {
         borderRadius: BorderRadius.circular(14),
       ),
       child: child,
+    );
+  }
+
+  String _pagos(dynamic n) => n == 1 ? '1 pago' : '$n pagos';
+
+  // Control de caja: lo cobrado por método (pagos completados, por fecha del cobro),
+  // para cuadrar el efectivo contra el QR.
+  Widget _buildVentasPorMetodo() {
+    final bloque = _reporte!['payments_by_method'];
+    if (bloque == null) return const SizedBox.shrink();   // reporte guardado de una versión anterior
+    final metodos = bloque['methods'] as List;
+    final total = _num(bloque['total_amount']);
+    final porConfirmar = bloque['pending_confirmation'];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _titulo('Ventas por método de pago', Icons.account_balance_wallet),
+          _contenedor(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...metodos.map((m) => _filaConBarra(
+                      m['name'],
+                      'Bs. ${_num(m['amount']).toStringAsFixed(2)} · ${_pagos(m['payments'])}',
+                      total == 0 ? 0 : _num(m['amount']) / total,
+                    )),
+                const Divider(color: Colors.white24),
+                Text(
+                  'Total cobrado: Bs. ${total.toStringAsFixed(2)} (${_pagos(bloque['total_payments'])})',
+                  style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold),
+                ),
+                if (porConfirmar != null && (porConfirmar['payments'] ?? 0) > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Por confirmar en caja: ${_pagos(porConfirmar['payments'])} '
+                    '(Bs. ${_num(porConfirmar['amount']).toStringAsFixed(2)}), no se suman',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
