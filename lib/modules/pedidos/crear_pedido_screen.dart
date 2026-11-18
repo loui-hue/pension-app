@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
+import '../../core/utils/calculos.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 
@@ -93,16 +94,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
     }
   }
 
-  double get _total {
-    double total = 0;
-    _carrito.forEach((productId, cantidad) {
-      try {
-        final producto = _productos.firstWhere((p) => p['id'] == productId);
-        total += double.parse(producto['price'].toString()) * cantidad;
-      } catch (e) {}
-    });
-    return total;
-  }
+  double get _total => totalDelCarrito(_carrito, _productos);
 
   void _agregarProducto(int productId) {
     setState(() {
@@ -358,7 +350,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         ),
       );
 
-  int get _cantidadItems => _carrito.values.fold(0, (suma, c) => suma + c);
+  int get _cantidadItems => unidadesDelCarrito(_carrito);
 
   /// Productos agrupados por el nombre de su categoría, en el orden en que llegan.
   Map<String, List> _productosPorCategoria() {
