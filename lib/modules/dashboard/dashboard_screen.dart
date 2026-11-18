@@ -95,7 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _MenuItem(icon: Icons.bar_chart, label: 'Reportes', route: '/reportes'),
         _MenuItem(icon: Icons.add_shopping_cart, label: 'Nuevo Pedido', route: '/crear-pedido'),
         _MenuItem(icon: Icons.people, label: 'Usuarios', route: '/usuarios'),
-        _MenuItem(icon: Icons.fastfood, label: 'Productos', route: '/productos'),
+        _MenuItem(icon: Icons.fastfood, label: 'Productos', route: '/gestionar-productos'),
         _MenuItem(icon: Icons.table_restaurant, label: 'Mesas', route: '/mesas'),
         _MenuItem(icon: Icons.receipt_long, label: 'Pedidos', route: '/pedidos'),
         _MenuItem(icon: Icons.payment, label: 'Cobranza', route: '/cobranza'),
