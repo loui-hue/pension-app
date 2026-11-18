@@ -1,9 +1,10 @@
 class AppConstants {
-  // IP del servidor local (PC con Docker en el Wi-Fi de la pensión). Se cambia sin tocar código:
+  // IP fija del servidor local (laptop con Docker en el Wi-Fi «Pension-Dona-Roberta» del router,
+  // red 192.168.0.0/24). Se cambia sin tocar código:
   //   flutter run --dart-define=API_URL=http://<IP-del-servidor>:8000/api
   static const String baseUrl = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'http://192.168.0.50:8000/api',
+    defaultValue: 'http://192.168.0.200:8000/api',
   );
   // Portal en la nube (solo consultas del comensal fuera de la pensión). Vacío = sin portal.
   //   flutter build apk --dart-define=PORTAL_URL=https://<IP-del-VPS>.sslip.io/api
