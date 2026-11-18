@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
+import '../../core/utils/calculos.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 import 'qr_imagen.dart';
@@ -88,14 +89,10 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
     }
   }
 
-  int _segundosRestantes(Map pago) {
-    final base = (pago['seconds_left'] as num?)?.toInt() ?? 0;
-    final restantes = base - DateTime.now().difference(_cargadoEn).inSeconds;
-    return restantes < 0 ? 0 : restantes;
-  }
-
-  String _formatoTiempo(int segundos) =>
-      '${(segundos ~/ 60).toString().padLeft(2, '0')}:${(segundos % 60).toString().padLeft(2, '0')}';
+  int _segundosRestantes(Map pago) => segundosRestantes(
+        (pago['seconds_left'] as num?)?.toInt() ?? 0,
+        DateTime.now().difference(_cargadoEn),
+      );
 
   void _mostrarMensaje(String texto, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -466,7 +463,7 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
                               size: 14, color: Colors.white),
                           const SizedBox(width: 4),
                           Text(
-                            vencido ? 'Vencido — verificar' : _formatoTiempo(segundos),
+                            vencido ? 'Vencido — verificar' : formatoCuentaRegresiva(segundos),
                             style: const TextStyle(color: Colors.white, fontSize: 12),
                           ),
                         ],
@@ -752,8 +749,6 @@ class _PantallaQrState extends State<_PantallaQr> {
     final metodo = widget.metodo;
     final tieneQr = metodo['has_qr'] == true;
     final vencido = _segundos == 0;
-    final minutos = (_segundos ~/ 60).toString().padLeft(2, '0');
-    final segs = (_segundos % 60).toString().padLeft(2, '0');
 
     return Scaffold(
       appBar: AppBar(title: Text('Pago por ${metodo['name'] ?? 'QR'}')),
@@ -797,7 +792,7 @@ class _PantallaQrState extends State<_PantallaQr> {
                     color: vencido ? Colors.red : AppTheme.accent),
                 const SizedBox(width: 8),
                 Text(
-                  vencido ? 'Tiempo vencido: verifica el depósito' : 'Tiempo para verificar: $minutos:$segs',
+                  vencido ? 'Tiempo vencido: verifica el depósito' : 'Tiempo para verificar: ${formatoCuentaRegresiva(_segundos)}',
                   style: TextStyle(
                     color: vencido ? Colors.red : AppTheme.textLight,
                     fontWeight: FontWeight.bold,
