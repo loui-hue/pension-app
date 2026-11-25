@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
+import '../utils/eleccion_servidor.dart';
 
 /// Comunicación con el servidor. La app trabaja con dos servidores:
 /// - el de la pensión (red local, Wi-Fi "Pension-Dona-Roberta"): todo el sistema;
@@ -23,8 +24,14 @@ class ApiService {
   /// Navegador de la app, para volver al login si la sesión deja de ser válida.
   static final navegador = GlobalKey<NavigatorState>();
 
+  // Direcciones posibles del servidor de la pensión y la que respondió la última vez
+  // (router de la pensión o zona Wi-Fi de la laptop).
+  static final List<String> _locales = listaDeServidores(AppConstants.servidoresLocales);
+  static String _local = _locales.first;
+  static bool _localRecordado = false;
+
   // Servidor en uso: el de la pensión (red local) o el portal en la nube.
-  static String _servidor = AppConstants.baseUrl;
+  static String _servidor = _local;
   static DateTime? _elegidoEn;
   static Future<void>? _eligiendo;
 
@@ -72,7 +79,12 @@ class ApiService {
         (rol == null || rol == AppConstants.roleCliente);
 
     var nuevoRemoto = false;
-    final fuera = await _ping(AppConstants.baseUrl, 2) == null;
+    final encontrado = await _buscarLocal();
+    final fuera = encontrado == null;
+    if (encontrado != null && encontrado != _local) {
+      _local = encontrado;
+      await _storage.write(key: AppConstants.servidorLocalKey, value: encontrado);
+    }
     if (fuera && puedeUsarPortal) {
       final portal = await _ping(AppConstants.portalUrl, 6);
       if (portal != null) {
@@ -81,11 +93,23 @@ class ApiService {
       }
       // Si ninguno responde se deja el local y las pantallas muestran la caché.
     }
-    _servidor = nuevoRemoto ? AppConstants.portalUrl : AppConstants.baseUrl;
+    _servidor = nuevoRemoto ? AppConstants.portalUrl : _local;
     if (!nuevoRemoto) portalSincronizadoEn = null;
     _elegidoEn = DateTime.now();
     remoto.value = nuevoRemoto;
     fueraDeLaPension.value = fuera;
+  }
+
+  /// Prueba a la vez todas las direcciones de la pensión (la última que funcionó
+  /// primero) con el mismo tiempo de espera de siempre (2 s) y devuelve la primera
+  /// que responde a /ping, o null si el teléfono no está en ninguna de esas redes.
+  static Future<String?> _buscarLocal() async {
+    if (!_localRecordado) {
+      _localRecordado = true;
+      final guardado = await _storage.read(key: AppConstants.servidorLocalKey);
+      if (guardado != null && _locales.contains(guardado)) _local = guardado;
+    }
+    return primeroQueResponde(ordenDePrueba(_locales, _local), (s) async => await _ping(s, 2) != null);
   }
 
   /// Vigila la red mientras la app está abierta (ver [_VigilanteDeRed]).
@@ -131,7 +155,7 @@ class ApiService {
     if (sinConexion) {
       final antes = _servidor;
       await elegirServidor(forzar: true);
-      if (_servidor != antes && (_servidor == AppConstants.baseUrl || o.method == 'GET')) {
+      if (_servidor != antes && (_servidor != AppConstants.portalUrl || o.method == 'GET')) {
         return _reintentar(o);
       }
       return null;
@@ -173,7 +197,7 @@ class ApiService {
   static Future<bool?> _traerSesion() async {
     try {
       await Dio(BaseOptions(
-        baseUrl: AppConstants.baseUrl,
+        baseUrl: _local,
         connectTimeout: const Duration(seconds: 4),
         receiveTimeout: const Duration(seconds: 15),
         headers: {'Accept': 'application/json', 'Authorization': 'Bearer $_token'},
@@ -238,10 +262,15 @@ class _VigilanteDeRed with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!_enPrimerPlano || ApiService._eligiendo != null) return;
-      // Se vuelve a elegir solo si la red de la pensión apareció (estando fuera)
-      // o desapareció (estando dentro).
-      final hayPension = await ApiService._ping(AppConstants.baseUrl, 2) != null;
-      if (hayPension == ApiService.fueraDeLaPension.value) await ApiService.elegirServidor(forzar: true);
+      // Se vuelve a elegir solo si la red de la pensión apareció (estando fuera),
+      // desapareció (estando dentro) o el servidor responde en la otra dirección
+      // (se pasó del router de la pensión a la zona Wi-Fi de la laptop, o al revés).
+      final encontrado = await ApiService._buscarLocal();
+      final hayPension = encontrado != null;
+      if (hayPension == ApiService.fueraDeLaPension.value ||
+          (hayPension && encontrado != ApiService._local)) {
+        await ApiService.elegirServidor(forzar: true);
+      }
     });
   }
 
