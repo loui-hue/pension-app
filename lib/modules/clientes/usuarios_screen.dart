@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/utils/avisos.dart';
+import '../../core/utils/contrasena.dart';
 import '../../core/widgets/transicion_carga.dart';
 
 /// Usuarios (RF-08, solo administrador). Pestaña «Personal»: crea cuentas del
@@ -338,9 +339,10 @@ class _FormularioPersonalState extends State<_FormularioPersonal> {
                 onPressed: () => setState(() => _verPassword = !_verPassword),
               ),
             ),
-            validator: (v) => (v ?? '').length < 6 ? 'Al menos 6 caracteres' : null,
+            validator: (v) => problemaDeContrasena(v ?? '', cual: 'La contraseña temporal'),
           ),
-          const Text('Entrégasela en persona: deberá cambiarla en su primer ingreso.',
+          const Text('Al menos 8 caracteres, con letras y números. Entrégasela en persona: '
+              'deberá cambiarla en su primer ingreso.',
               style: TextStyle(color: Colors.white54, fontSize: 12)),
         ],
         const SizedBox(height: 12),
