@@ -7,6 +7,7 @@ import '../../core/services/consulta_periodica.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 import '../../core/widgets/aviso_sin_conexion.dart';
+import '../../core/utils/cortesia.dart';
 
 class MisPedidosScreen extends StatefulWidget {
   const MisPedidosScreen({super.key});
@@ -193,7 +194,7 @@ class _MisPedidosScreenState extends State<MisPedidosScreen> {
                             ),
                             const SizedBox(height: 4),
                             ...items.map((item) => Text(
-                              '• ${item['product']?['name']} x${item['quantity']} — Bs. ${item['subtotal']}',
+                              lineaDelPlato(item, conPrecio: true),
                               style: TextStyle(
                                 color: AppTheme.textLight.withOpacity(0.7),
                                 fontSize: 12,

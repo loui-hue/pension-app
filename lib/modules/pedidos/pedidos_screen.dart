@@ -5,6 +5,7 @@ import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/cortesia.dart';
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({super.key});
@@ -309,7 +310,7 @@ class _PedidosScreenState extends State<PedidosScreen>
             ...items.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Text(
-                '• ${item['product']?['name']} x${item['quantity']}',
+                lineaDelPlato(item),
                 style: TextStyle(
                   color: AppTheme.textLight.withOpacity(0.8),
                   fontSize: 13,

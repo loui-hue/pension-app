@@ -7,6 +7,7 @@ import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 import 'qr_imagen.dart';
 import '../../core/services/consulta_periodica.dart';
+import '../../core/utils/cortesia.dart';
 
 class CobranzaScreen extends StatefulWidget {
   const CobranzaScreen({super.key});
@@ -572,7 +573,7 @@ class _CobranzaScreenState extends State<CobranzaScreen> {
                 ),
                 const SizedBox(height: 6),
                 ...items.map((item) => Text(
-                      '• ${item['product']?['name']} x${item['quantity']}',
+                      lineaDelPlato(item),
                       style: const TextStyle(color: Colors.white70, fontSize: 12),
                     )),
                 const SizedBox(height: 10),

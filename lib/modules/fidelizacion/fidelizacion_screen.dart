@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/utils/cortesia.dart';
 import '../../core/widgets/transicion_carga.dart';
 import '../../core/widgets/aviso_sin_conexion.dart';
 
@@ -24,6 +25,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
   List _todosRetos = [];
   List _retosUsuario = [];
   Map _racha = {};
+  List _cortesias = [];
   int _totalXp = 0;
   bool _isLoading = true;
   bool _uniendoReto = false;
@@ -60,6 +62,11 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
         _apiService.get('/challenges/user'),
         _apiService.post('/loyalty/streak', {}),
       ]);
+      // La cortesía de la insignia es un extra: si no se puede consultar, la pantalla carga igual.
+      List cortesias = [];
+      try {
+        cortesias = (await _apiService.get('/cortesias')).data as List;
+      } catch (_) {}
       final datos = {
         'puntos': r[0].data,
         'insignias': r[1].data,
@@ -67,6 +74,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
         'retos': r[3].data,
         'retosUsuario': r[4].data,
         'racha': r[5].data,
+        'cortesias': cortesias,
       };
       await CacheService.guardar(claveCache, datos);
       _aplicarDatos(datos, desdeCache: null);
@@ -95,6 +103,7 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
       _todosRetos = datos['retos'];
       _retosUsuario = datos['retosUsuario'];
       _racha = datos['racha'];
+      _cortesias = (datos['cortesias'] as List?) ?? [];   // copias guardadas antes de la 1.1.13 no la traen
       _desdeCache = desdeCache;
       _isLoading = false;
     });
@@ -333,6 +342,8 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
             ),
           ),
         ),
+        if (avisoDeCortesia(_todasInsignias, _cortesias) case final aviso?)
+          SliverToBoxAdapter(child: _avisoCortesia(aviso)),
         SliverPadding(
           padding: const EdgeInsets.all(16),
           sliver: SliverGrid(
@@ -349,6 +360,42 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
           ),
         ),
       ],
+    );
+  }
+
+  /// Lo que la insignia «Cliente Frecuente» le da al comensal: un refresco del día de
+  /// cortesía, una vez. Verde si lo puede pedir, gris si ya lo usó, dorado si le falta.
+  Widget _avisoCortesia(({String estado, String titulo, String detalle}) aviso) {
+    final color = switch (aviso.estado) {
+      'disponible' => Colors.greenAccent,
+      'usada' => Colors.white54,
+      _ => AppTheme.accent,
+    };
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: [
+          Icon(aviso.estado == 'usada' ? Icons.check_circle : Icons.card_giftcard, color: color, size: 34),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(aviso.titulo,
+                    style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(aviso.detalle, style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.3)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -401,6 +448,17 @@ class _FidelizacionScreenState extends State<FidelizacionScreen>
                   color: obtenida ? Colors.white : Colors.white24,
                 ),
               ),
+              // La insignia invita algo (cortesía): un regalo en la esquina.
+              if (insignia['reward_product'] != null)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(color: AppTheme.background, shape: BoxShape.circle),
+                    child: Icon(Icons.card_giftcard, size: 16, color: obtenida ? Colors.greenAccent : Colors.white54),
+                  ),
+                ),
               if (!obtenida)
                 Positioned(
                   right: 0,

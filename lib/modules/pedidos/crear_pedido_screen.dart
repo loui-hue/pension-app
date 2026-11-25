@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/utils/calculos.dart';
+import '../../core/utils/cortesia.dart';
 import '../../core/themes/app_theme.dart';
 import '../../core/widgets/transicion_carga.dart';
 
@@ -30,6 +31,10 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
   /// Pedido pendiente que se está modificando (null = pedido nuevo).
   Map? _pedido;
   bool get _modificando => _pedido != null;
+  /// Cortesía de insignia que el comensal puede recibir en este pedido (el refresco
+  /// del día de «Cliente Frecuente»), o null. Se entrega a precio 0, una sola vez.
+  Map? _cortesia;
+  bool _incluirCortesia = false;
 
   @override
   void initState() {
@@ -49,6 +54,16 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         // Modificar: se precargan los platos, la mesa, el comensal y las notas.
         _pedido = args['pedido'] as Map;
         for (final item in (_pedido!['items'] as List? ?? [])) {
+          // La cortesía no va al carrito: se muestra en su propia tarjeta, ya marcada.
+          if (esCortesia(item)) {
+            _cortesia = {
+              'product_id': item['product_id'],
+              'producto': item['product']?['name'] ?? 'Refresco del día',
+              'insignia': 'Cliente Frecuente',
+            };
+            _incluirCortesia = true;
+            continue;
+          }
           final id = item['product_id'] as int;
           _carrito[id] = (_carrito[id] ?? 0) + (item['quantity'] as int);
         }
@@ -89,9 +104,31 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         _comensales = resComensales?.data ?? [];
         _isLoading = false;
       });
+      // El cliente pide a su nombre; al modificar, el comensal ya es el del pedido.
+      if (!_debeElegirComensal) {
+        _buscarCortesia(null);
+      } else if (_modificando && _cortesia == null && _comensalSeleccionado != null) {
+        _buscarCortesia(_comensalSeleccionado!['id']);
+      }
     } catch (e) {
       setState(() => _isLoading = false);
     }
+  }
+
+  /// ¿El comensal tiene la cortesía de su insignia sin usar? (el cliente: la suya).
+  /// Si no se puede consultar, simplemente no se ofrece.
+  Future<void> _buscarCortesia(dynamic comensalId) async {
+    try {
+      final res = await _apiService.get(comensalId == null ? '/cortesias' : '/cortesias?user_id=$comensalId');
+      final disponible = cortesiaDisponible(res.data as List);
+      if (!mounted) return;
+      // Si mientras tanto se eligió a otro comensal, la respuesta ya no sirve.
+      if (comensalId != null && _comensalSeleccionado?['id'] != comensalId) return;
+      setState(() {
+        _cortesia = disponible;
+        _incluirCortesia = false;
+      });
+    } catch (_) {}
   }
 
   double get _total => totalDelCarrito(_carrito, _productos);
@@ -124,11 +161,14 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
     if (elegido == null) return;
     setState(() {
       _comensalSeleccionado = elegido;
+      _cortesia = null;
+      _incluirCortesia = false;
       // Si se acaba de registrar, que aparezca en la lista la próxima vez.
       if (!_comensales.any((c) => c['id'] == elegido['id'])) {
         _comensales = [elegido, ..._comensales];
       }
     });
+    _buscarCortesia(elegido['id']);
   }
 
   Future<void> _enviarPedido() async {
@@ -144,7 +184,7 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
       );
       return;
     }
-    if (_carrito.isEmpty) {
+    if (_carrito.isEmpty && !_incluirCortesia) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Agrega productos al pedido'), backgroundColor: Colors.red),
       );
@@ -154,10 +194,14 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
     setState(() => _enviando = true);
 
     try {
-      final items = _carrito.entries.map((e) => {
-        'product_id': e.key,
-        'quantity': e.value,
-      }).toList();
+      final items = [
+        ..._carrito.entries.map((e) => {
+              'product_id': e.key,
+              'quantity': e.value,
+            }),
+        if (_incluirCortesia && _cortesia != null)
+          {'product_id': _cortesia!['product_id'], 'quantity': 1, 'cortesia': true},
+      ];
 
       if (_modificando) {
         await _apiService.put('/orders/${_pedido!['id']}', {
@@ -270,6 +314,10 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
                   }).toList(),
                   onChanged: (val) => setState(() => _mesaSeleccionada = val),
                 ),
+                if (_cortesia != null) ...[
+                  const SizedBox(height: 12),
+                  _tarjetaCortesia(),
+                ],
                 // Productos agrupados por categoría
                 ..._productosPorCategoria().entries.expand((grupo) => [
                       Padding(
@@ -350,7 +398,36 @@ class _CrearPedidoScreenState extends State<CrearPedidoScreen> {
         ),
       );
 
-  int get _cantidadItems => unidadesDelCarrito(_carrito);
+  int get _cantidadItems => unidadesDelCarrito(_carrito) + (_incluirCortesia ? 1 : 0);
+
+  /// «🎁 Cortesía de Cliente Frecuente: Refresco del día (vaso), gratis» con un
+  /// interruptor para incluirla en este pedido.
+  Widget _tarjetaCortesia() {
+    final nombre = _debeElegirComensal ? (_comensalSeleccionado?['name'] ?? 'El comensal') : 'Tienes';
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _incluirCortesia ? Colors.greenAccent : Colors.green.withValues(alpha: 0.4)),
+      ),
+      child: SwitchListTile(
+        value: _incluirCortesia,
+        onChanged: (v) => setState(() => _incluirCortesia = v),
+        activeThumbColor: Colors.greenAccent,
+        secondary: const Icon(Icons.card_giftcard, color: Colors.greenAccent, size: 30),
+        title: Text(
+          '${_cortesia!['producto']} de cortesía',
+          style: const TextStyle(color: AppTheme.textLight, fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          _debeElegirComensal
+              ? '$nombre tiene la insignia «${_cortesia!['insignia']}». Es gratis y se entrega una sola vez.'
+              : '$nombre la insignia «${_cortesia!['insignia']}». Es gratis y se entrega una sola vez.',
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+      ),
+    );
+  }
 
   /// Productos agrupados por el nombre de su categoría, en el orden en que llegan.
   Map<String, List> _productosPorCategoria() {

@@ -491,6 +491,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
         _grid([
           _tarjeta('XP otorgado', '${l['xp_awarded']}', Icons.bolt),
           _tarjeta('Insignias obtenidas', '${l['badges_awarded']}', Icons.military_tech),
+          _tarjeta('Cortesías entregadas', '${l['courtesies_given'] ?? 0}', Icons.card_giftcard),
           _tarjeta('Rachas activas', '${l['active_streaks']}', Icons.local_fire_department),
         ]),
       ],
