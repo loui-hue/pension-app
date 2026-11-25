@@ -18,6 +18,7 @@ import 'modules/reportes/reportes_screen.dart';
 import 'modules/cobranzas/metodos_pago_screen.dart';
 import 'modules/auth/cambiar_password_screen.dart';
 import 'modules/productos/gestionar_productos_screen.dart';
+import 'modules/reportes/auditoria_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +60,7 @@ class MyApp extends StatelessWidget {
         '/dashboard': (context) => const DashboardScreen(),
         '/productos': (context) => const ProductosScreen(),
         '/gestionar-productos': (context) => const GestionarProductosScreen(),
+        '/auditoria': (context) => const AuditoriaScreen(),
         '/pedidos': (context) => const PedidosScreen(),
         '/crear-pedido': (context) => const CrearPedidoScreen(),
         '/mis-pedidos': (context) => const MisPedidosScreen(),
