@@ -17,6 +17,7 @@ class AppConstants {
   static const String tokenKey = 'auth_token';
   static const String userKey = 'auth_user';      // rol del usuario con sesión
   static const String userIdKey = 'auth_user_id'; // id, para la caché por usuario
+  static const String userNameKey = 'auth_user_name'; // nombre, para el saludo del inicio
 
   // Roles
   static const String roleAdmin = 'administrador';

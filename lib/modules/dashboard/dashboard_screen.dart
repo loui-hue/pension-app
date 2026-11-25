@@ -4,6 +4,7 @@ import '../../core/widgets/transicion_carga.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/api_service.dart';
 import '../../core/services/cache_service.dart';
+import '../../core/utils/auditoria.dart' show nombresDeRol;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -19,6 +20,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Después, si el teléfono entra o sale del Wi-Fi de la pensión, el menú se
   // rearma solo (escucha ApiService.remoto).
   late final Future<void> _servidor = ApiService.elegirServidor();
+
+  /// Nombre de quien tiene la sesión («Juan Mesero»), para el saludo.
+  String? _nombre;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarNombre();
+  }
+
+  /// Se guarda al iniciar sesión. Si la sesión es de una versión anterior (sin el
+  /// nombre guardado), se pide una vez al servidor y se guarda.
+  Future<void> _cargarNombre() async {
+    const storage = FlutterSecureStorage();
+    var nombre = await storage.read(key: AppConstants.userNameKey);
+    if (nombre == null || nombre.isEmpty) {
+      try {
+        await _servidor;
+        final api = ApiService();
+        await api.init();
+        nombre = '${(await api.get('/me')).data['name'] ?? ''}';
+        if (nombre.isNotEmpty) await storage.write(key: AppConstants.userNameKey, value: nombre);
+      } catch (_) {
+        return;   // sin conexión: se muestra solo el rol
+      }
+    }
+    if (mounted && nombre.isNotEmpty) setState(() => _nombre = nombre);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,14 +85,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 color: AppTheme.surface,
-                child: Text(
-                  'Bienvenido: $role',
-                  style: const TextStyle(
-                    color: AppTheme.accent,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
+                // «Bienvenido, Juan Mesero» y debajo el rol, para saber con qué cuenta se entró.
+                child: Column(
+                  children: [
+                    Text(
+                      _nombre == null ? 'Bienvenido' : 'Bienvenido, $_nombre',
+                      style: const TextStyle(
+                        color: AppTheme.accent,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        nombresDeRol[role] ?? role,
+                        style: const TextStyle(color: AppTheme.textLight, fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               if (ApiService.modoRemoto && role == AppConstants.roleCliente) const _AvisoModoRemoto(),
