@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/themes/app_theme.dart';
+import '../../core/utils/contrasena.dart';
 
 /// Primer ingreso de un comensal registrado por el mesero: entró con su celular
 /// como contraseña temporal y debe crear una propia antes de usar la app.
@@ -21,8 +22,9 @@ class _CambiarPasswordScreenState extends State<CambiarPasswordScreen> {
   String? _error;
 
   Future<void> _guardar(String role, String actual) async {
-    if (_nueva.text.length < 6) {
-      setState(() => _error = 'La contraseña debe tener al menos 6 caracteres');
+    final problema = problemaDeContrasena(_nueva.text);
+    if (problema != null) {
+      setState(() => _error = problema);
       return;
     }
     if (_nueva.text != _confirmar.text) {
@@ -100,7 +102,12 @@ class _CambiarPasswordScreenState extends State<CambiarPasswordScreen> {
               autocorrect: false,
               enableSuggestions: false,
               style: const TextStyle(color: AppTheme.textLight),
-              decoration: _decoracion('Nueva contraseña (mínimo 6)'),
+              decoration: _decoracion('Nueva contraseña'),
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 6, left: 4),
+              child: Text('Al menos $minimoContrasena caracteres, con letras y números (por ejemplo: pension24).',
+                  style: TextStyle(color: Colors.white60, fontSize: 12)),
             ),
             const SizedBox(height: 12),
             TextField(
