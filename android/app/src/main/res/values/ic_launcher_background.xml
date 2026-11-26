@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Naranja del círculo del logo de la pensión (branding/logo_pension.jpg). -->
+    <color name="ic_launcher_background">#D3522B</color>
+</resources>
